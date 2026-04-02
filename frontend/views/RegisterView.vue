@@ -1,21 +1,28 @@
 <template>
-  <div>
-    <h2>Register</h2>
+  <div class="auth-container">
+    <div class="auth-card">
+      <h2>Create Account</h2>
 
-    <form @submit.prevent="handleRegister">
-      <input v-model="username" placeholder="Username" />
-      <input v-model="email" placeholder="Email" />
-      <input v-model="password" type="password" placeholder="Password" />
+      <form @submit.prevent="handleRegister">
+        <input v-model="username" placeholder="Username" />
 
-      <select v-model="role">
-        <option value="user">User</option>
-        <option value="creator">Creator</option>
-      </select>
+        <input v-model="email" placeholder="Email" />
+        <p v-if="errors.email" class="error">{{ errors.email }}</p>
 
-      <button type="submit">Register</button>
-    </form>
+        <input v-model="password" type="password" placeholder="Password" />
 
-    <p @click="$router.push('/')">Go to Login</p>
+        <select v-model="role">
+          <option value="user">User</option>
+          <option value="creator">Creator</option>
+        </select>
+
+        <button class="primary-btn">Register</button>
+      </form>
+
+      <p class="link" @click="$router.push('/')">
+        Already have an account?
+      </p>
+    </div>
   </div>
 </template>
 
@@ -29,17 +36,38 @@ const email = ref('');
 const password = ref('');
 const role = ref('user');
 
+const errors = ref({});
+
 const router = useRouter();
 const { register } = useAuth();
 
 const handleRegister = async () => {
-  await register({
-    username: username.value,
-    email: email.value,
-    password: password.value,
-    role: role.value
-  });
+  errors.value = {};
 
-  router.push('/');
+  try {
+    await register({
+      username: username.value,
+      email: email.value,
+      password: password.value,
+      role: role.value
+    });
+
+    router.push('/');
+  } catch (err) {
+    const field = err.response?.data?.field;
+    const message = err.response?.data?.message;
+
+    if (field) {
+      errors.value[field] = message;
+    }
+  }
 };
 </script>
+
+<style scoped>
+/* reuse same styles from login */
+.error {
+  color: red;
+  font-size: 12px;
+}
+</style>

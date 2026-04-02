@@ -2,18 +2,27 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { createUser, findUserByEmail } from '../services/auth.service.js';
 
+// REGISTER
 export const register = async (req, res) => {
   try {
     const { username, email, password, role } = req.body;
 
+    const existing = await findUserByEmail(email);
+    if (existing) {
+      return res.status(400).json({
+        field: 'email',
+        message: 'Email already in use'
+      });
+    }
+
     const userId = await createUser({ username, email, password, role });
 
-    res.json({
-      message: 'User created',
-      userId
-    });
+    res.json({ message: 'User created', userId });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({
+      message: 'Registration failed'
+    });
   }
 };
 
