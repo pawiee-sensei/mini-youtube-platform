@@ -1,5 +1,4 @@
 import pool from '../config/db.js';
-import { getVideosByUser } from '../services/video.service.js';
 
 export const createVideo = async (data) => {
   const [result] = await pool.query(

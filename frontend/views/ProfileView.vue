@@ -44,7 +44,9 @@
 
 <section class="videos-section">
 
-  <!-- VIDEOS TAB -->
+
+  <!---------- VIDEOS TAB ---------->
+
   <template v-if="activeTab === 'Videos'">
     <div class="section-head">
       <h2>Channel videos</h2>
@@ -67,7 +69,7 @@
     </div>
   </template>
 
-  <!-- PLAYLISTS TAB -->
+  <!---------- PLAYLISTS TAB ---------->
   <template v-else-if="activeTab === 'Playlists'">
     <div class="empty-state">
       <h3>No playlists yet</h3>
@@ -75,7 +77,7 @@
     </div>
   </template>
 
-  <!-- HISTORY TAB -->
+  <!----------HISTORY TAB ---------->
   <template v-else-if="activeTab === 'History'">
     <div class="empty-state">
       <h3>No watch history</h3>
@@ -84,52 +86,77 @@
   </template>
 </section>
 
-<!-- CREATE VIDEO MODAL -->
+
+<!---------- CREATE VIDEO MODAL ---------->
+
 <div v-if="showModal" class="modal-overlay">
-
   <div class="modal">
-
-    <h2>Upload Video</h2>
-
-    <form @submit.prevent="handleSubmit">
-
-      <input
-        v-model="form.title"
-        placeholder="Video title"
-        required
-      />
-
-      <textarea
-        v-model="form.description"
-        placeholder="Description"
-      ></textarea>
-
-      <div class="file-input">
-        <label>Video File</label>
-        <input type="file" @change="handleVideo" accept="video/*" />
+    <div class="modal-header">
+      <div>
+        <span class="modal-eyebrow">Creator studio</span>
+        <h2>Upload Video</h2>
+        <p>Fill in the details for your next upload.</p>
       </div>
 
-      <div class="file-input">
-        <label>Thumbnail</label>
-        <input type="file" @change="handleThumbnail" accept="image/*" />
+      <button class="modal-close" type="button" @click="showModal = false">
+        ×
+      </button>
+    </div>
+
+    <form @submit.prevent="handleSubmit">
+      <div class="field-group">
+        <label for="video-title">Video title</label>
+        <input
+          id="video-title"
+          v-model="form.title"
+          placeholder="Give your video a clear title"
+          required
+        />
+      </div>
+
+      <div class="field-group">
+        <label for="video-description">Description</label>
+        <textarea
+          id="video-description"
+          v-model="form.description"
+          placeholder="Tell viewers what this video is about"
+        ></textarea>
+      </div>
+
+      <div class="upload-grid">
+        <div class="file-input">
+          <label>Video file</label>
+          <div class="upload-card">
+            <strong>{{ form.video ? form.video.name : 'Choose a video file' }}</strong>
+            <span>MP4, MOV, or any supported video format</span>
+            <input type="file" @change="handleVideo" accept="video/*" />
+          </div>
+        </div>
+
+        <div class="file-input">
+          <label>Thumbnail</label>
+          <div class="upload-card">
+            <strong>{{ form.thumbnail ? form.thumbnail.name : 'Choose a thumbnail' }}</strong>
+            <span>PNG or JPG cover image for your video</span>
+            <input type="file" @change="handleThumbnail" accept="image/*" />
+          </div>
+        </div>
       </div>
 
       <div class="modal-actions">
-        <button type="button" @click="showModal = false">
+        <button type="button" class="modal-btn modal-btn-muted" @click="showModal = false">
           Cancel
         </button>
 
-        <button type="submit">
+        <button type="submit" class="modal-btn modal-btn-primary">
           Upload
         </button>
       </div>
-
     </form>
-
   </div>
-
 </div>
 
+<!---------- END ---------->
 
 </section>
 </template>
@@ -157,19 +184,48 @@ const handleThumbnail = (e) => {
   form.value.thumbnail = e.target.files[0];
 };
 
-const handleSubmit = () => {
-  console.log('FORM DATA:', form.value);
+const handleSubmit = async () => {
+  if (!form.value.video) {
+    alert('Please choose a video file before uploading.');
+    return;
+  }
 
-  // temporary: just close modal
-  showModal.value = false;
+  try {
+    const formData = new FormData();
 
-  // reset form
-  form.value = {
-    title: '',
-    description: '',
-    video: null,
-    thumbnail: null
-  };
+    formData.append('title', form.value.title);
+    formData.append('description', form.value.description);
+    formData.append('video', form.value.video);
+
+    if (form.value.thumbnail) {
+      formData.append('thumbnail', form.value.thumbnail);
+    }
+
+    const res = await api.post('/videos/upload', formData);
+
+    console.log('UPLOAD SUCCESS:', res.data);
+
+    // 🔥 refresh videos instantly
+    await fetchVideos();
+
+    showModal.value = false;
+
+    // reset form
+    form.value = {
+      title: '',
+      description: '',
+      video: null,
+      thumbnail: null
+    };
+
+  } catch (err) {
+    console.error(err);
+    const message =
+      err.response?.data?.message ||
+      err.response?.data?.error ||
+      'Upload failed';
+    alert(message);
+  }
 };
 
 const tabs = ['Videos', 'Playlists', 'History'];
@@ -218,12 +274,10 @@ onMounted(fetchVideos);
 <style scoped>
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.6);
-
+  inset: 0;
+  padding: 20px;
+  background: rgba(8, 10, 14, 0.72);
+  backdrop-filter: blur(10px);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -231,25 +285,127 @@ onMounted(fetchVideos);
 }
 
 .modal {
-  background: white;
-  padding: 24px;
-  border-radius: 16px;
-  width: 400px;
+  width: min(100%, 620px);
+  padding: 28px;
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 247, 250, 0.98));
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.modal-eyebrow {
+  display: inline-flex;
+  margin-bottom: 10px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: rgba(255, 49, 49, 0.1);
+  color: #d21c31;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .modal h2 {
-  margin-bottom: 16px;
+  margin-bottom: 6px;
+}
+
+.modal form {
+  display: grid;
+  gap: 16px;
+}
+
+.modal-header p {
+  color: #66707e;
+}
+
+.modal-close {
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 50%;
+  background: #edf0f4;
+  color: #111;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.field-group {
+  display: grid;
+  gap: 8px;
+}
+
+.field-group label,
+.file-input label {
+  display: block;
+  color: #252a33;
+  font-size: 0.92rem;
+  font-weight: 700;
 }
 
 .modal input,
 .modal textarea {
+  display: block;
   width: 100%;
-  margin-bottom: 12px;
-  padding: 10px;
+  box-sizing: border-box;
+  border: 1px solid #d7dce3;
+  border-radius: 16px;
+  padding: 14px 16px;
+  background: #fff;
+  color: #111318;
+  font: inherit;
+  line-height: 1.5;
+}
+
+.modal textarea {
+  min-height: 120px;
+  height: 140px;
+  resize: vertical;
+}
+
+.upload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .file-input {
-  margin-bottom: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.upload-card {
+  padding: 18px;
+  border: 1px dashed #cfd6df;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff, #f6f7fa);
+}
+
+.upload-card strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #111318;
+}
+
+.upload-card span {
+  display: block;
+  margin-bottom: 14px;
+  color: #66707e;
+  font-size: 0.88rem;
+}
+
+.upload-card input[type='file'] {
+  padding: 10px 12px;
+  background: #f2f4f7;
 }
 
 .modal-actions {
@@ -258,8 +414,23 @@ onMounted(fetchVideos);
   gap: 10px;
 }
 
-.modal-actions button {
-  padding: 8px 14px;
+.modal-btn {
+  padding: 12px 18px;
+  border: none;
+  border-radius: 999px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modal-btn-muted {
+  background: #eceff3;
+  color: #14171c;
+}
+
+.modal-btn-primary {
+  background: linear-gradient(135deg, #ff3131, #cc1023);
+  color: #fff;
 }
 
 
@@ -473,6 +644,22 @@ onMounted(fetchVideos);
 
   .channel-content {
     margin-top: -40px;
+  }
+
+  .upload-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .modal {
+    padding: 22px;
+  }
+
+  .modal-header,
+  .modal-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>
