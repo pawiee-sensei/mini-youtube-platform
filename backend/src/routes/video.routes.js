@@ -3,7 +3,9 @@ import {
   uploadVideoWithFiles,
   fetchVideos,
   fetchVideo,
-  fetchVideosByUser
+  fetchVideosByUser,
+  updateVideo,
+  deleteVideo
 } from '../controllers/video.controller.js';
 import { authMiddleware } from '../middlewares/auth.middleware.js';
 import { upload } from '../middlewares/upload.middleware.js';
@@ -21,6 +23,8 @@ router.post(
 );
 router.get('/', fetchVideos);
 router.get('/user/:userId', fetchVideosByUser);
+router.put('/:id', authMiddleware, updateVideo);
+router.delete('/:id', authMiddleware, deleteVideo);
 router.get('/:id', fetchVideo);
 
 export default router;

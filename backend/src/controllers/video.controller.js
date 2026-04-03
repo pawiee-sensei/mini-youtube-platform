@@ -1,5 +1,11 @@
-import { createVideo, getAllVideos, getVideoById } from '../services/video.service.js';
-import { getVideosByUser } from '../services/video.service.js';
+import {
+  createVideo,
+  getAllVideos,
+  getVideoById,
+  getVideosByUser,
+  deleteVideoById,
+  updateVideoById
+} from '../services/video.service.js';
 
 export const uploadVideo = async (req, res) => {
   try {
@@ -68,6 +74,40 @@ export const uploadVideoWithFiles = async (req, res) => {
 
   } catch (err) {
     console.error('UPLOAD VIDEO ERROR:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const deleteVideo = async (req, res) => {
+  try {
+    const result = await deleteVideoById(req.params.id, req.user.id);
+
+    if (!result) {
+      return res.status(404).json({ message: 'Video not found or not allowed' });
+    }
+
+    res.json({ message: 'Deleted successfully' });
+  } catch (err) {
+    console.error('DELETE VIDEO ERROR:', err);
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const updateVideo = async (req, res) => {
+  try {
+    const result = await updateVideoById(
+      req.params.id,
+      req.user.id,
+      req.body
+    );
+
+    if (!result) {
+      return res.status(404).json({ message: 'Video not found or not allowed' });
+    }
+
+    res.json({ message: 'Updated successfully' });
+  } catch (err) {
+    console.error('UPDATE VIDEO ERROR:', err);
     res.status(500).json({ error: err.message });
   }
 };

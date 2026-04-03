@@ -55,11 +55,29 @@
 
     <div v-if="videos.length" class="videos">
       <article v-for="video in videos" :key="video.id" class="video-card">
-        <div class="video-thumb"></div>
+        <div class="video-thumb">
+            <img
+                v-if="video.thumbnail_url"
+                :src="getThumbnail(video.thumbnail_url)"
+                alt="thumbnail"
+            />
+
+            <div v-else class="no-thumb">
+                No Thumbnail
+            </div>
+
+            <span class="video-pill">HD</span>
+        </div>
         <div class="video-info">
           <strong>{{ video.title }}</strong>
           <span>Channel upload</span>
         </div>
+
+        <div v-if="isOwner" class="video-actions">
+            <button type="button" @click="openEdit(video)">Edit</button>
+            <button type="button" @click="deleteVideo(video.id)">Delete</button>
+        </div>
+
       </article>
     </div>
 
@@ -156,6 +174,23 @@
   </div>
 </div>
 
+
+<!---------- Edit VIDEO MODAL ---------->
+
+        <div v-if="showEditModal" class="modal-overlay">
+        <div class="modal">
+            <h2>Edit Video</h2>
+
+            <input v-model="selectedVideo.title" />
+            <textarea v-model="selectedVideo.description"></textarea>
+
+            <div class="modal-actions">
+            <button type="button" @click="showEditModal = false">Cancel</button>
+            <button type="button" @click="submitEdit">Save</button>
+            </div>
+        </div>
+        </div>
+
 <!---------- END ---------->
 
 </section>
@@ -166,6 +201,59 @@ import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import api from '../src/services/api';
 import { useAuth } from '../src/store/auth';
+
+const selectedVideo = ref(null);
+const showEditModal = ref(false);
+
+const openEdit = (video) => {
+  selectedVideo.value = { ...video };
+  showEditModal.value = true;
+};
+
+const deleteVideo = async (id) => {
+  if (!confirm('Delete this video?')) return;
+
+  try {
+    await api.delete(`/videos/${id}`);
+    await fetchVideos();
+  } catch (err) {
+    const message =
+      err.response?.data?.message ||
+      err.response?.data?.error ||
+      'Delete failed';
+    alert(message);
+  }
+};
+
+
+const submitEdit = async () => {
+  if (!selectedVideo.value?.id) {
+    alert('No video selected.');
+    return;
+  }
+
+  try {
+    await api.put(`/videos/${selectedVideo.value.id}`, {
+      title: selectedVideo.value.title,
+      description: selectedVideo.value.description
+    });
+
+    showEditModal.value = false;
+    await fetchVideos();
+  } catch (err) {
+    console.error(err);
+    const message =
+      err.response?.data?.message ||
+      err.response?.data?.error ||
+      'Update failed';
+    alert(message);
+  }
+};
+
+const getThumbnail = (path) => {
+  if (!path) return null;
+  return `http://localhost:5000${path}`;
+};
 
 const showModal = ref(false);
 
@@ -272,6 +360,18 @@ onMounted(fetchVideos);
 </script>
 
 <style scoped>
+
+.video-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+}
+
+.video-actions button {
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -562,9 +662,31 @@ onMounted(fetchVideos);
 
 .video-thumb {
   position: relative;
-  min-height: 170px;
-  background: linear-gradient(135deg, #ff4a4a, #1d1f27);
+  width: 100%;
+  aspect-ratio: 16 / 9; /* 🔥 KEY FIX */
+  overflow: hidden;
+  border-radius: 16px;
+  background: #000;
 }
+
+.video-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* now safe because container is correct ratio */
+}
+
+.no-thumb {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ddd;
+  color: #555;
+  font-size: 12px;
+}
+
+
 
 .video-pill {
   position: absolute;

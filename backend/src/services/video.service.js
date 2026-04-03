@@ -1,5 +1,6 @@
 import pool from '../config/db.js';
 
+
 export const createVideo = async (data) => {
   const [result] = await pool.query(
     'INSERT INTO videos (user_id, title, description, video_url, thumbnail_url) VALUES (?, ?, ?, ?, ?)',
@@ -30,3 +31,22 @@ export const getVideosByUser = async (user_id) => {
   );
   return rows;
 };
+
+export const deleteVideoById = async (videoId, userId) => {
+  const [result] = await pool.query(
+    'DELETE FROM videos WHERE id = ? AND user_id = ?',
+    [videoId, userId]
+  );
+
+  return result.affectedRows;
+};
+
+export const updateVideoById = async (videoId, userId, data) => {
+  const [result] = await pool.query(
+    'UPDATE videos SET title = ?, description = ? WHERE id = ? AND user_id = ?',
+    [data.title, data.description, videoId, userId]
+  );
+
+  return result.affectedRows;
+};
+
