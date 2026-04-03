@@ -1,4 +1,5 @@
 import pool from '../config/db.js';
+import { getVideosByUser } from '../services/video.service.js';
 
 export const createVideo = async (data) => {
   const [result] = await pool.query(
@@ -21,4 +22,12 @@ export const getVideoById = async (id) => {
     [id]
   );
   return rows[0];
+};
+
+export const getVideosByUser = async (user_id) => {
+  const [rows] = await pool.query(
+    'SELECT * FROM videos WHERE user_id = ? ORDER BY created_at DESC',
+    [user_id]
+  );
+  return rows;
 };

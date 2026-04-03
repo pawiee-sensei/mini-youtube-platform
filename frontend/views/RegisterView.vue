@@ -11,10 +11,6 @@
 
         <input v-model="password" type="password" placeholder="Password" />
 
-        <select v-model="role">
-          <option value="user">User</option>
-          <option value="creator">Creator</option>
-        </select>
 
         <button class="primary-btn">Register</button>
       </form>

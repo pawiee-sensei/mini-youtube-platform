@@ -1,4 +1,5 @@
 import { createVideo, getAllVideos, getVideoById } from '../services/video.service.js';
+import { getVideosByUser } from '../services/video.service.js';
 
 export const uploadVideo = async (req, res) => {
   try {
@@ -20,4 +21,16 @@ export const fetchVideos = async (req, res) => {
 export const fetchVideo = async (req, res) => {
   const video = await getVideoById(req.params.id);
   res.json(video);
+};
+
+export const fetchVideosByUser = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const videos = await getVideosByUser(userId);
+
+    res.json(videos);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 };
