@@ -14,9 +14,7 @@
           </p>
         </div>
 
-        <button v-if="isOwner" class="upload-btn" @click="goUpload">
-          Upload Video
-        </button>
+        
       </div>
     </div>
 
@@ -27,32 +25,113 @@
       </div>
     </div>
 
-    <section class="videos-section">
-      <div class="section-head">
-        <div>
-          <h2>Channel videos</h2>
-          <p>{{ videos.length }} videos published to this channel</p>
+    <div class="channel-actions">
+        <div class="tabs">
+            <button
+                v-for="tab in tabs"
+                :key="tab"
+                :class="['tab', { active: activeTab === tab }]"
+                @click="activeTab = tab"
+                >
+                {{ tab }}
+            </button>
+
         </div>
+            <button v-if="isOwner" class="create-btn" @click="showModal = true">
+            + Create
+            </button>
+         </div>
+
+<section class="videos-section">
+
+  <!-- VIDEOS TAB -->
+  <template v-if="activeTab === 'Videos'">
+    <div class="section-head">
+      <h2>Channel videos</h2>
+      <p>{{ videos.length }} videos published</p>
+    </div>
+
+    <div v-if="videos.length" class="videos">
+      <article v-for="video in videos" :key="video.id" class="video-card">
+        <div class="video-thumb"></div>
+        <div class="video-info">
+          <strong>{{ video.title }}</strong>
+          <span>Channel upload</span>
+        </div>
+      </article>
+    </div>
+
+    <div v-else class="empty-state">
+      <h3>No videos yet</h3>
+      <p>Start uploading your first video.</p>
+    </div>
+  </template>
+
+  <!-- PLAYLISTS TAB -->
+  <template v-else-if="activeTab === 'Playlists'">
+    <div class="empty-state">
+      <h3>No playlists yet</h3>
+      <p>Create playlists to organize videos.</p>
+    </div>
+  </template>
+
+  <!-- HISTORY TAB -->
+  <template v-else-if="activeTab === 'History'">
+    <div class="empty-state">
+      <h3>No watch history</h3>
+      <p>Watched videos will appear here.</p>
+    </div>
+  </template>
+</section>
+
+<!-- CREATE VIDEO MODAL -->
+<div v-if="showModal" class="modal-overlay">
+
+  <div class="modal">
+
+    <h2>Upload Video</h2>
+
+    <form @submit.prevent="handleSubmit">
+
+      <input
+        v-model="form.title"
+        placeholder="Video title"
+        required
+      />
+
+      <textarea
+        v-model="form.description"
+        placeholder="Description"
+      ></textarea>
+
+      <div class="file-input">
+        <label>Video File</label>
+        <input type="file" @change="handleVideo" accept="video/*" />
       </div>
 
-      <div v-if="videos.length" class="videos">
-        <article v-for="video in videos" :key="video.id" class="video-card">
-          <div class="video-thumb">
-            <span class="video-pill">HD</span>
-          </div>
-          <div class="video-info">
-            <strong>{{ video.title }}</strong>
-            <span>Channel upload</span>
-          </div>
-        </article>
+      <div class="file-input">
+        <label>Thumbnail</label>
+        <input type="file" @change="handleThumbnail" accept="image/*" />
       </div>
 
-      <div v-else class="empty-state">
-        <h3>No videos yet</h3>
-        <p>This channel is ready for its first upload.</p>
+      <div class="modal-actions">
+        <button type="button" @click="showModal = false">
+          Cancel
+        </button>
+
+        <button type="submit">
+          Upload
+        </button>
       </div>
-    </section>
-  </section>
+
+    </form>
+
+  </div>
+
+</div>
+
+
+</section>
 </template>
 
 <script setup>
@@ -60,6 +139,41 @@ import { ref, onMounted, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import api from '../src/services/api';
 import { useAuth } from '../src/store/auth';
+
+const showModal = ref(false);
+
+const form = ref({
+  title: '',
+  description: '',
+  video: null,
+  thumbnail: null
+});
+
+const handleVideo = (e) => {
+  form.value.video = e.target.files[0];
+};
+
+const handleThumbnail = (e) => {
+  form.value.thumbnail = e.target.files[0];
+};
+
+const handleSubmit = () => {
+  console.log('FORM DATA:', form.value);
+
+  // temporary: just close modal
+  showModal.value = false;
+
+  // reset form
+  form.value = {
+    title: '',
+    description: '',
+    video: null,
+    thumbnail: null
+  };
+};
+
+const tabs = ['Videos', 'Playlists', 'History'];
+const activeTab = ref('Videos');
 
 const route = useRoute();
 const router = useRouter();
@@ -102,6 +216,53 @@ onMounted(fetchVideos);
 </script>
 
 <style scoped>
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: white;
+  padding: 24px;
+  border-radius: 16px;
+  width: 400px;
+}
+
+.modal h2 {
+  margin-bottom: 16px;
+}
+
+.modal input,
+.modal textarea {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 10px;
+}
+
+.file-input {
+  margin-bottom: 12px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.modal-actions button {
+  padding: 8px 14px;
+}
+
+
 .profile-page {
   padding: 30px 28px 56px;
   min-height: calc(100vh - 88px);
@@ -261,6 +422,42 @@ onMounted(fetchVideos);
   border-radius: 24px;
   text-align: center;
   background: #f4f6f8;
+}
+
+.channel-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.tab {
+  border: none;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.tab.active {
+  background: #111;
+  color: white;
+}
+
+.create-btn {
+  border: none;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff3131, #cc1023);
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
 }
 
 @media (max-width: 920px) {
