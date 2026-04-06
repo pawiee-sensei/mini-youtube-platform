@@ -1,71 +1,72 @@
 <template>
-  <!-- Main container of the watch page -->
+  <!-- Main container for the watch page -->
   <section class="watch-page">
     <div class="watch-layout">
-
-      <!-- Left column: player, video details, and comments -->
+      <!-- Left column: player, metadata, and comments -->
       <div class="watch-main">
-
-        <!-- Video player wrapper -->
         <div class="player-shell">
-
-          <!-- Render the video only when the backend returned a source URL -->
+          <!-- Render the player only when the backend returns a video source -->
           <video
             v-if="video.video_url"
             controls
             class="player"
-            :src="base + video.video_url" 
+            :src="base + video.video_url"
             @play="handlePlay"
           ></video>
         </div>
 
-        <!-- Video metadata -->
         <div class="meta-card">
           <h1>{{ video.title }}</h1>
 
-          <!-- Uploader name and total views -->
           <div class="sub-meta">
             <span>{{ video.uploader_username || 'MiniYouTube Creator' }}</span>
             <span>{{ video.views || 0 }} views</span>
           </div>
 
-          <!-- Like button -->
+          <!-- Subscription summary for the uploader channel -->
+          <div class="channel-bar">
+            <span>{{ subscriberCount }} subscribers</span>
+
+            <button
+              class="subscribe-btn"
+              :disabled="isOwnChannel"
+              @click="toggleSubscription"
+            >
+              {{ isOwnChannel ? 'Your Channel' : subscribed ? 'Subscribed' : 'Subscribe' }}
+            </button>
+          </div>
+
           <div class="actions">
             <button class="like-btn" @click="toggleLike">
               {{ liked ? 'Unlike' : 'Like' }} ({{ likesCount }})
             </button>
           </div>
 
-          <!-- Video description -->
           <p>{{ video.description || 'No description yet.' }}</p>
         </div>
 
-        <!-- COMMENTS SECTION -->
         <div class="comments-panel">
           <div class="section-head">
             <h2>Comments</h2>
             <span>{{ comments.length }}</span>
           </div>
 
-          <!-- Show the comment form only to logged-in users -->
+          <!-- Only logged-in users can submit comments -->
           <div v-if="isAuthenticated()" class="comment-box">
-            <!-- v-model keeps the input value in sync with newComment -->
             <input
-              v-model="newComment" 
+              v-model="newComment"
               placeholder="Write a comment..."
             />
             <button @click="submitComment">Post</button>
           </div>
 
-          <!-- Comments list -->
           <div v-if="comments.length" class="comments">
-            <div v-for="c in comments" :key="c.id" class="comment">
-              <strong>{{ c.username }}</strong>
-              <p>{{ c.content }}</p>
+            <div v-for="comment in comments" :key="comment.id" class="comment">
+              <strong>{{ comment.username }}</strong>
+              <p>{{ comment.content }}</p>
             </div>
           </div>
 
-          <!-- Empty state -->
           <div v-else class="empty-state">
             <h3>No comments yet</h3>
             <p>Start the conversation on this video.</p>
@@ -76,14 +77,11 @@
       <!-- Right column: recommended videos -->
       <aside class="watch-sidebar">
         <div class="sidebar-card">
-
-          <!-- Sidebar header -->
           <div class="section-head">
             <h2>Recommended</h2>
             <span>{{ filteredVideos.length }}</span>
           </div>
 
-          <!-- Recommended list -->
           <div v-if="paginatedVideos.length" class="recommended-list">
             <button
               v-for="item in paginatedVideos"
@@ -92,8 +90,6 @@
               type="button"
               @click="goToVideo(item.id)"
             >
-              <!-- Open another watch page when a recommended item is clicked -->
-              <!-- Thumbnail -->
               <div class="recommended-thumb">
                 <img
                   v-if="item.thumbnail_url"
@@ -103,7 +99,6 @@
                 <div v-else class="recommended-fallback">No Thumbnail</div>
               </div>
 
-              <!-- Video info -->
               <div class="recommended-copy">
                 <strong>{{ item.title }}</strong>
                 <span>{{ item.uploader_username || 'MiniYouTube Creator' }}</span>
@@ -112,13 +107,11 @@
             </button>
           </div>
 
-          <!-- Empty recommended -->
           <div v-else class="empty-state compact">
             <h3>No videos found</h3>
             <p>Try a different search term.</p>
           </div>
 
-          <!-- Pagination controls -->
           <div v-if="totalPages > 1" class="pagination">
             <button type="button" :disabled="currentPage === 1" @click="currentPage--">
               Previous
@@ -128,7 +121,6 @@
               Next
             </button>
           </div>
-
         </div>
       </aside>
     </div>
@@ -136,48 +128,35 @@
 </template>
 
 <script setup>
-// Vue core utilities
 import { computed, ref, onMounted, watch } from 'vue';
-
-// Vue Router helpers for the current route and page navigation
 import { useRoute, useRouter } from 'vue-router';
-
-// Shared Axios client for backend requests
 import api from '../src/services/api';
-
-// Auth store used to check whether the user is logged in
 import { useAuth } from '../src/store/auth';
 
-// Route state and navigation helpers
 const route = useRoute();
 const router = useRouter();
+const { isAuthenticated, user } = useAuth();
 
-// Auth helper used in the template and actions
-const { isAuthenticated } = useAuth();
+const video = ref({});
+const videos = ref([]);
+const comments = ref([]);
+const newComment = ref('');
+const likesCount = ref(0);
+const liked = ref(false);
+const currentPage = ref(1);
+const subscribed = ref(false);
+const subscriberCount = ref(0);
 
-// Reactive state used by the watch page UI
-const video = ref({});          // Currently selected video
-const videos = ref([]);         // All videos used to build the recommended list
-const comments = ref([]);       // Comments for the current video
-const newComment = ref('');     // New comment input value
-const likesCount = ref(0);      // Total likes for the current video
-const liked = ref(false);       // Whether the current user already liked this video
-const currentPage = ref(1);     // Current page in the recommended sidebar
-
-// Backend base URL
 const base = 'http://localhost:5000';
-
-// Prevent counting the same visit more than once
 const hasCountedView = ref(false);
-
-// Number of recommended videos per page
 const pageSize = 5;
 
-/*
-  Filter the recommended list by:
-  1. removing the current video
-  2. applying the search term from the route query (?search=...)
-*/
+// Prevent creators from subscribing to their own channel.
+const isOwnChannel = computed(() => {
+  return !!user.value && String(user.value.id) === String(video.value.user_id);
+});
+
+// Filter recommended videos using the header search query and exclude the current video.
 const filteredVideos = computed(() => {
   const currentId = String(route.params.id);
   const query = String(route.query.search || '').trim().toLowerCase();
@@ -194,60 +173,61 @@ const filteredVideos = computed(() => {
   });
 });
 
-// Total number of pages in the recommended sidebar
 const totalPages = computed(() => {
   return Math.max(1, Math.ceil(filteredVideos.value.length / pageSize));
 });
 
-// Only show the videos for the active sidebar page
 const paginatedVideos = computed(() => {
   const start = (currentPage.value - 1) * pageSize;
   return filteredVideos.value.slice(start, start + pageSize);
 });
 
-/*
-  FETCH FUNCTIONS (API CALLS)
-*/
-
-// Load the main video data
 const fetchVideo = async () => {
   const res = await api.get(`/videos/${route.params.id}`);
   video.value = res.data;
-
-  // If the card already counted the view, do not count it again on first play
   hasCountedView.value = route.query.counted === '1';
 };
 
-// Load all videos so the sidebar can build recommended items
 const fetchAllVideos = async () => {
   const res = await api.get('/videos');
   videos.value = res.data;
 };
 
-// Load total likes and whether the current user liked this video
 const fetchLikes = async () => {
   try {
     const res = await api.get(`/likes/${route.params.id}`);
     likesCount.value = res.data.count;
     liked.value = res.data.liked;
   } catch {
-    // Fall back to a safe empty state if the likes request fails
     likesCount.value = 0;
     liked.value = false;
   }
 };
 
-// Load comments for the current video
 const fetchComments = async () => {
   const res = await api.get(`/comments/${route.params.id}`);
   comments.value = res.data;
 };
 
-/*
-  EVENT HANDLERS
-*/
+// Subscription status needs the uploader id from the fetched video payload.
+const fetchSubscription = async () => {
+  if (!isAuthenticated() || !video.value.user_id) {
+    subscribed.value = false;
+    subscriberCount.value = 0;
+    return;
+  }
 
-// Count a view only once per watch-page visit
+  try {
+    const res = await api.get(`/subscriptions/${video.value.user_id}`);
+    subscribed.value = res.data.subscribed;
+    subscriberCount.value = res.data.count;
+  } catch {
+    subscribed.value = false;
+    subscriberCount.value = 0;
+  }
+};
+
+// Count one view per watch-page visit.
 const handlePlay = async () => {
   if (hasCountedView.value || !route.params.id) return;
 
@@ -260,7 +240,6 @@ const handlePlay = async () => {
   }
 };
 
-// Toggle like state, then refresh the like summary
 const toggleLike = async () => {
   if (!isAuthenticated()) {
     alert('Login required');
@@ -276,7 +255,25 @@ const toggleLike = async () => {
   await fetchLikes();
 };
 
-// Post a new comment and reload the comment list
+const toggleSubscription = async () => {
+  if (!isAuthenticated()) {
+    alert('Login required');
+    return;
+  }
+
+  if (isOwnChannel.value || !video.value.user_id) {
+    return;
+  }
+
+  try {
+    const res = await api.post(`/subscriptions/${video.value.user_id}`);
+    subscribed.value = res.data.subscribed;
+    subscriberCount.value = res.data.count;
+  } catch (err) {
+    console.error('SUBSCRIPTION ERROR:', err);
+  }
+};
+
 const submitComment = async () => {
   if (!newComment.value.trim()) return;
 
@@ -288,14 +285,10 @@ const submitComment = async () => {
   await fetchComments();
 };
 
-// Open another video from the recommended sidebar
 const goToVideo = (id) => {
   router.push(`/watch/${id}`);
 };
 
-/*
-  Load every API resource the watch page needs
-*/
 const loadPageData = async () => {
   currentPage.value = 1;
 
@@ -305,29 +298,19 @@ const loadPageData = async () => {
     fetchLikes(),
     fetchComments()
   ]);
+
+  setTimeout(fetchSubscription, 300);
 };
 
-// Run once when the page is first mounted
 onMounted(loadPageData);
 
-/*
-  Watchers keep the page in sync with route changes
-*/
-
-// Reload the whole page state when the watched video changes
 watch(() => route.params.id, loadPageData);
-
-// Keep the view-count flag aligned with the route query
 watch(() => route.query.counted, () => {
   hasCountedView.value = route.query.counted === '1';
 });
-
-// Reset pagination whenever the header search term changes
 watch(() => route.query.search, () => {
   currentPage.value = 1;
 });
-
-// Prevent the current page from pointing past the available results
 watch(totalPages, (value) => {
   if (currentPage.value > value) {
     currentPage.value = value;
@@ -416,11 +399,25 @@ watch(totalPages, (value) => {
   font-size: 0.95rem;
 }
 
+.channel-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: #f4f6f8;
+  color: #4f5968;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
 .actions {
   display: flex;
 }
 
 .like-btn,
+.subscribe-btn,
 .comment-box button,
 .pagination button {
   border: 0;
@@ -432,9 +429,17 @@ watch(totalPages, (value) => {
 }
 
 .like-btn,
+.subscribe-btn,
 .comment-box button {
   color: #fff;
   background: linear-gradient(135deg, #ff3131, #cc1023);
+}
+
+.subscribe-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  background: #b8c0ca;
+  color: #1f2630;
 }
 
 .section-head {

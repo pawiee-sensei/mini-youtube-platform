@@ -6,6 +6,7 @@ import authRoutes from './routes/auth.routes.js';
 import videoRoutes from './routes/video.routes.js';
 import commentRoutes from './routes/comment.routes.js';
 import likeRoutes from './routes/like.routes.js';
+import subscriptionRoutes from './routes/subscription.routes.js';
 
 const app = express();
 
@@ -21,5 +22,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/videos', videoRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/likes', likeRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
 
 export default app;
