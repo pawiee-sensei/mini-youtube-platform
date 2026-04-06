@@ -21,6 +21,9 @@
       </template>
 
       <template v-else>
+        <button class="nav-btn nav-btn-muted" @click="$router.push('/')">
+          Home
+        </button>
         <button class="nav-btn nav-btn-muted" @click="$router.push('/dashboard')">
           Dashboard
         </button>

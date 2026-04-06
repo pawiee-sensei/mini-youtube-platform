@@ -8,45 +8,33 @@ import DashboardView from '../../views/DashboardView.vue';
 import ProfileView from '../../views/ProfileView.vue';
 import WatchView from '../../views/WatchView.vue';
 
-
 const routes = [
-  { path: '/', component: HomeView }, // ✅ FIXED
-
+  { path: '/', component: HomeView },
   { path: '/login', component: LoginView },
   { path: '/register', component: RegisterView },
-  {path: '/watch/:id', component: WatchView },
-
-
+  { path: '/watch/:id', component: WatchView },
   {
     path: '/dashboard',
     component: DashboardView,
     meta: { requiresAuth: true }
-  },  
-
+  },
   {
     path: '/profile/:id',
-  component: ProfileView
-}
-
+    component: ProfileView
+  }
 ];
 
 const router = createRouter({
   history: createWebHistory(),
-  routes,
+  routes
 });
 
 router.beforeEach((to, from, next) => {
   const { isAuthenticated } = useAuth();
   const loggedIn = isAuthenticated();
 
-  // 🔒 Protect private routes
   if (to.meta.requiresAuth && !loggedIn) {
     return next('/login');
-  }
-
-  // 🔁 Redirect logged-in users away from public home
-  if (to.path === '/' && loggedIn) {
-    return next('/dashboard');
   }
 
   next();

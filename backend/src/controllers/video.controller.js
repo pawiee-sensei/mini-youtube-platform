@@ -4,20 +4,9 @@ import {
   getVideoById,
   getVideosByUser,
   deleteVideoById,
-  updateVideoById
+  updateVideoById,
+  incrementVideoViews
 } from '../services/video.service.js';
-
-export const uploadVideo = async (req, res) => {
-  try {
-    const videoId = await createVideo({
-      ...req.body,
-      user_id: req.user.id
-    });
-    res.json({ videoId });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
 
 export const fetchVideos = async (req, res) => {
   const videos = await getAllVideos();
@@ -27,6 +16,21 @@ export const fetchVideos = async (req, res) => {
 export const fetchVideo = async (req, res) => {
   const video = await getVideoById(req.params.id);
   res.json(video);
+};
+
+export const addVideoView = async (req, res) => {
+  try {
+    const updated = await incrementVideoViews(req.params.id);
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Video not found' });
+    }
+
+    const video = await getVideoById(req.params.id);
+    res.json(video);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 };
 
 export const fetchVideosByUser = async (req, res) => {

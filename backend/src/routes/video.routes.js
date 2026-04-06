@@ -4,6 +4,7 @@ import {
   fetchVideos,
   fetchVideo,
   fetchVideosByUser,
+  addVideoView,
   updateVideo,
   deleteVideo
 } from '../controllers/video.controller.js';
@@ -23,6 +24,7 @@ router.post(
 );
 router.get('/', fetchVideos);
 router.get('/user/:userId', fetchVideosByUser);
+router.post('/:id/view', addVideoView);
 router.put('/:id', authMiddleware, updateVideo);
 router.delete('/:id', authMiddleware, deleteVideo);
 router.get('/:id', fetchVideo);
