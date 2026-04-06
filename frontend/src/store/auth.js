@@ -1,14 +1,29 @@
 import { ref } from 'vue';
 import api from '../services/api';
 
-// ✅ GLOBAL STATE (outside function = shared)
 const user = ref(null);
 const token = ref(localStorage.getItem('token') || null);
+const initialized = ref(false);
 
-// ✅ Initialize user if token exists (optional improvement later)
+const initialize = async () => {
+  if (!token.value) {
+    initialized.value = true;
+    return;
+  }
+
+  try {
+    const res = await api.get('/auth/me');
+    user.value = res.data.user;
+  } catch (err) {
+    token.value = null;
+    user.value = null;
+    localStorage.removeItem('token');
+  } finally {
+    initialized.value = true;
+  }
+};
 
 export const useAuth = () => {
-
   const login = async (email, password) => {
     const res = await api.post('/auth/login', { email, password });
 
@@ -34,6 +49,8 @@ export const useAuth = () => {
   return {
     user,
     token,
+    initialized,
+    initialize,
     login,
     register,
     logout,

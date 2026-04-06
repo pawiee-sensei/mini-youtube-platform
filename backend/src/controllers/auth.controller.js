@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { createUser, findUserByEmail } from '../services/auth.service.js';
+import { createUser, findUserByEmail, findUserById } from '../services/auth.service.js';
 
 // REGISTER
 export const register = async (req, res) => {
@@ -41,6 +41,24 @@ export const login = async (req, res) => {
 
     res.json({
       token,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const getMe = async (req, res) => {
+  try {
+    const user = await findUserById(req.user.id);
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    res.json({
       user: {
         id: user.id,
         username: user.username,
