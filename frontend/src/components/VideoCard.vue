@@ -24,6 +24,8 @@ const props = defineProps({
 const router = useRouter();
 const base = 'http://localhost:5000';
 
+// Opening a card counts a view immediately, then the query flag tells WatchView
+// not to count the same visit a second time on first play.
 const goWatch = async () => {
   try {
     await api.post(`/videos/${props.video.id}/view`);

@@ -78,6 +78,8 @@ import { useAuth } from '../src/store/auth';
 const videos = ref([]);
 const { isAuthenticated, user } = useAuth();
 
+// The home page reuses the same public video feed for both guests and logged-in users.
+// The difference is the hero/actions shown at the top of the page.
 const fetchVideos = async () => {
   const res = await api.get('/videos');
   videos.value = res.data;

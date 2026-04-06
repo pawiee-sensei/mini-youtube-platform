@@ -10,6 +10,16 @@
       </div>
     </div>
 
+    <form class="search-form" @submit.prevent="submitSearch">
+      <input
+        v-model="searchText"
+        class="search-input"
+        type="search"
+        placeholder="Search videos"
+      />
+      <button class="search-btn" type="submit">Search</button>
+    </form>
+
     <div class="nav">
       <template v-if="!isAuthenticated()">
         <button class="nav-btn nav-btn-muted" @click="$router.push('/login')">
@@ -43,16 +53,44 @@
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router';
+import { ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '../store/auth';
 
+const route = useRoute();
 const router = useRouter();
 const { isAuthenticated, logout, user } = useAuth();
+const searchText = ref(route.query.search || '');
+
+// The header search writes to the current route query so pages like WatchView
+// can react to it without needing a separate shared store.
+const submitSearch = () => {
+  const nextQuery = { ...route.query };
+
+  if (searchText.value.trim()) {
+    nextQuery.search = searchText.value.trim();
+  } else {
+    delete nextQuery.search;
+  }
+
+  router.push({
+    path: route.path,
+    query: nextQuery
+  });
+};
 
 const handleLogout = () => {
   logout();
   router.push('/');
 };
+
+// Keep the input in sync when navigation changes the search query.
+watch(
+  () => route.query.search,
+  (value) => {
+    searchText.value = value || '';
+  }
+);
 </script>
 
 <style scoped>
@@ -64,6 +102,7 @@ const handleLogout = () => {
   align-items: center;
   justify-content: space-between;
   gap: 20px;
+  flex-wrap: wrap;
   padding: 18px 28px;
   background:
     linear-gradient(180deg, rgba(12, 12, 14, 0.96), rgba(12, 12, 14, 0.88));
@@ -113,6 +152,40 @@ const handleLogout = () => {
   font-size: 0.78rem;
 }
 
+.search-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  max-width: 520px;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 180px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+}
+
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.52);
+}
+
+.search-btn {
+  border: 0;
+  border-radius: 999px;
+  padding: 11px 16px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .nav {
   display: flex;
   align-items: center;
@@ -155,6 +228,11 @@ const handleLogout = () => {
     padding: 16px 18px;
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .search-form {
+    width: 100%;
+    max-width: none;
   }
 
   .nav {
