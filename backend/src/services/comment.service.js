@@ -15,3 +15,17 @@ export const getCommentsByVideo = async (video_id) => {
   );
   return rows;
 };
+
+//BACKEND (COMMENT SYSTEM)
+
+export const getCommentsWithUser = async (video_id) => {
+  const [rows] = await pool.query(
+    `SELECT comments.*, users.username 
+     FROM comments 
+     JOIN users ON comments.user_id = users.id
+     WHERE video_id = ?
+     ORDER BY created_at DESC`,
+    [video_id]
+  );
+  return rows;
+};

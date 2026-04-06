@@ -1,4 +1,4 @@
-import { addComment, getCommentsByVideo } from '../services/comment.service.js';
+import { addComment, getCommentsWithUser } from '../services/comment.service.js';
 
 export const createComment = async (req, res) => {
   const id = await addComment({
@@ -10,6 +10,6 @@ export const createComment = async (req, res) => {
 };
 
 export const fetchComments = async (req, res) => {
-  const comments = await getCommentsByVideo(req.params.videoId);
+  const comments = await getCommentsWithUser(req.params.videoId);
   res.json(comments);
 };
