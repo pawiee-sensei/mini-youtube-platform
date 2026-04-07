@@ -13,7 +13,8 @@ export const getAllVideos = async () => {
   const [rows] = await pool.query(
     `SELECT
       videos.*,
-      users.username AS uploader_username
+      users.username AS uploader_username,
+      users.avatar AS uploader_avatar
     FROM videos
     LEFT JOIN users ON users.id = videos.user_id
     ORDER BY videos.created_at DESC`
@@ -25,7 +26,8 @@ export const getVideoById = async (id) => {
   const [rows] = await pool.query(
     `SELECT
       videos.*,
-      users.username AS uploader_username
+      users.username AS uploader_username,
+      users.avatar AS uploader_avatar
     FROM videos
     LEFT JOIN users ON users.id = videos.user_id
     WHERE videos.id = ?`,
@@ -38,7 +40,8 @@ export const getVideosByUser = async (user_id) => {
   const [rows] = await pool.query(
     `SELECT
       videos.*,
-      users.username AS uploader_username
+      users.username AS uploader_username,
+      users.avatar AS uploader_avatar
     FROM videos
     LEFT JOIN users ON users.id = videos.user_id
     WHERE videos.user_id = ?

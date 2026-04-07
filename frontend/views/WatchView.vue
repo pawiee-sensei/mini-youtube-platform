@@ -4,7 +4,7 @@
     <div class="watch-layout">
       <!-- Left column: player, metadata, and comments -->
       <div class="watch-main">
-        <div class="player-shell">
+        <div ref="playerShell" class="player-shell">
           <div
             v-if="video.video_url"
             class="player-stage"
@@ -87,28 +87,37 @@
               type="button"
               @click="goToProfile(video.user_id)"
             >
-              {{ video.uploader_username || 'MiniYouTube Creator' }}
+              <span class="creator-avatar">
+                <img
+                  v-if="video.uploader_avatar"
+                  :src="base + video.uploader_avatar"
+                  alt="creator avatar"
+                />
+                <span v-else>{{ (video.uploader_username || 'M').charAt(0).toUpperCase() }}</span>
+              </span>
+              <span>{{ video.uploader_username || 'MiniYouTube Creator' }}</span>
             </button>
             <span>{{ video.views || 0 }} views</span>
-          </div>
-
-          <!-- Subscription summary for the uploader channel -->
-          <div class="channel-bar">
-            <span>{{ subscriberCount }} subscribers</span>
-
             <button
-              class="subscribe-btn"
-              :disabled="isOwnChannel"
-              @click="toggleSubscription"
+              class="like-chip"
+              type="button"
+              @click="toggleLike"
+              :aria-pressed="liked"
             >
-              {{ isOwnChannel ? 'Your Channel' : subscribed ? 'Subscribed' : 'Subscribe' }}
+              <span class="like-icon">{{ liked ? '♥' : '♡' }}</span>
+              <span>{{ likesCount }}</span>
             </button>
-          </div>
 
-          <div class="actions">
-            <button class="like-btn" @click="toggleLike">
-              {{ liked ? 'Unlike' : 'Like' }} ({{ likesCount }})
-            </button>
+            <div class="channel-actions-inline">
+              <span class="subscriber-total">{{ subscriberCount }} subscribers</span>
+              <button
+                :class="['subscribe-btn', { subscribed }]"
+                :disabled="isOwnChannel"
+                @click="toggleSubscription"
+              >
+                {{ isOwnChannel ? 'Your Channel' : subscribed ? 'Subscribed' : 'Subscribe' }}
+              </button>
+            </div>
           </div>
 
           <p>{{ video.description || 'No description yet.' }}</p>
@@ -145,7 +154,7 @@
 
       <!-- Right column: recommended videos -->
       <aside class="watch-sidebar">
-        <div class="sidebar-card">
+        <div class="sidebar-card" :style="sidebarCardStyle">
           <div class="section-head">
             <h2>Recommended</h2>
             <span>{{ filteredVideos.length }}</span>
@@ -197,7 +206,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onBeforeUnmount, onMounted, watch } from 'vue';
+import { computed, ref, onBeforeUnmount, onMounted, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import api from '../src/services/api';
 import { useAuth } from '../src/store/auth';
@@ -213,6 +222,7 @@ const newComment = ref('');
 const likesCount = ref(0);
 const liked = ref(false);
 const player = ref(null);
+const playerShell = ref(null);
 const currentPage = ref(1);
 const subscribed = ref(false);
 const subscriberCount = ref(0);
@@ -229,6 +239,8 @@ const centerControlsHideTimer = ref(null);
 const nativeControlsHideTimer = ref(null);
 const overlayHintTimer = ref(null);
 const surfaceClickTimer = ref(null);
+const sidebarHeight = ref(null);
+let playerShellObserver = null;
 const pageSize = 5;
 
 // Prevent creators from subscribing to their own channel.
@@ -260,6 +272,16 @@ const totalPages = computed(() => {
 const paginatedVideos = computed(() => {
   const start = (currentPage.value - 1) * pageSize;
   return filteredVideos.value.slice(start, start + pageSize);
+});
+
+const sidebarCardStyle = computed(() => {
+  if (!sidebarHeight.value) {
+    return {};
+  }
+
+  return {
+    height: `${sidebarHeight.value}px`
+  };
 });
 
 const fetchVideo = async () => {
@@ -663,16 +685,45 @@ const loadPageData = async () => {
   ]);
 
   setTimeout(fetchSubscription, 300);
+  await nextTick();
+  updateSidebarHeight();
+};
+
+const updateSidebarHeight = () => {
+  if (!playerShell.value) {
+    sidebarHeight.value = null;
+    return;
+  }
+
+  sidebarHeight.value = Math.round(playerShell.value.getBoundingClientRect().height);
 };
 
 onMounted(loadPageData);
 onMounted(() => {
   window.addEventListener('keydown', handlePlayerKeydown);
+  window.addEventListener('resize', updateSidebarHeight);
+
+  nextTick(() => {
+    updateSidebarHeight();
+
+    if (typeof ResizeObserver !== 'undefined' && playerShell.value) {
+      playerShellObserver = new ResizeObserver(() => {
+        updateSidebarHeight();
+      });
+      playerShellObserver.observe(playerShell.value);
+    }
+  });
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handlePlayerKeydown);
+  window.removeEventListener('resize', updateSidebarHeight);
   clearOverlayTimers();
+
+  if (playerShellObserver) {
+    playerShellObserver.disconnect();
+    playerShellObserver = null;
+  }
 });
 
 watch(() => route.params.id, loadPageData);
@@ -690,6 +741,7 @@ watch(totalPages, (value) => {
 
 watch(player, () => {
   showPlayerOverlay();
+  nextTick(updateSidebarHeight);
 });
 </script>
 
@@ -715,6 +767,10 @@ watch(player, () => {
   gap: 18px;
 }
 
+.watch-sidebar {
+  align-self: start;
+}
+
 .player-shell,
 .meta-card,
 .comments-panel,
@@ -729,6 +785,13 @@ watch(player, () => {
   overflow: hidden;
   padding: 12px;
   background: #0f1014;
+}
+
+.sidebar-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  box-sizing: border-box;
 }
 
 .player-stage {
@@ -893,6 +956,13 @@ watch(player, () => {
   font-size: 0.95rem;
 }
 
+.channel-actions-inline {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .creator-link {
   border: 0;
   padding: 0;
@@ -901,30 +971,37 @@ watch(player, () => {
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .creator-link:hover {
   text-decoration: underline;
 }
 
-.channel-bar {
-  display: flex;
+.creator-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  overflow: hidden;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: #f4f6f8;
-  color: #4f5968;
-  font-size: 0.95rem;
-  font-weight: 600;
+  justify-content: center;
+  background: linear-gradient(135deg, #111318, #3b404a);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 800;
+  flex-shrink: 0;
 }
 
-.actions {
-  display: flex;
+.creator-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-.like-btn,
+.like-chip,
 .subscribe-btn,
 .comment-box button,
 .pagination button {
@@ -936,18 +1013,80 @@ watch(player, () => {
   cursor: pointer;
 }
 
-.like-btn,
 .subscribe-btn,
 .comment-box button {
   color: #fff;
   background: linear-gradient(135deg, #ff3131, #cc1023);
 }
 
+.like-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  color: #1b2028;
+  background: #eef2f6;
+  border: 1px solid #d6dde6;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.like-chip[aria-pressed='true'] {
+  background: #fff1f3;
+  border-color: #f3bcc6;
+  color: #b0182a;
+}
+
+.like-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(17, 19, 24, 0.08);
+  font-size: 0.92rem;
+  line-height: 1;
+}
+
+.like-chip[aria-pressed='true'] .like-icon {
+  background: rgba(176, 24, 42, 0.12);
+}
+
+.subscriber-total {
+  color: #677384;
+  font-size: 0.92rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.subscribe-btn {
+  padding: 10px 16px;
+  color: #15202b;
+  background: linear-gradient(180deg, #ffffff, #edf2f7);
+  border: 1px solid #d6dde6;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.subscribe-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, #ffffff, #e7edf4);
+}
+
+.subscribe-btn:not(:disabled) {
+  color: #15202b;
+}
+
+.subscribe-btn.subscribed:not(:disabled) {
+  background: #111318;
+  border-color: #111318;
+  color: #fff;
+}
+
 .subscribe-btn:disabled {
   cursor: not-allowed;
-  opacity: 0.65;
-  background: #b8c0ca;
-  color: #1f2630;
+  opacity: 0.75;
+  background: #eef2f6;
+  border-color: #d6dde6;
+  color: #526070;
 }
 
 .section-head {
@@ -998,9 +1137,26 @@ watch(player, () => {
 }
 
 .recommended-list {
+  flex: 1;
+  min-height: 0;
   display: grid;
   gap: 12px;
   margin-top: 16px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.recommended-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.recommended-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(120, 132, 149, 0.35);
+}
+
+.recommended-list::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .recommended-item {
@@ -1075,6 +1231,15 @@ watch(player, () => {
 @media (max-width: 1080px) {
   .watch-layout {
     grid-template-columns: 1fr;
+  }
+
+  .sidebar-card {
+    height: auto !important;
+  }
+
+  .recommended-list {
+    overflow: visible;
+    padding-right: 0;
   }
 }
 
