@@ -5,18 +5,77 @@
       <!-- Left column: player, metadata, and comments -->
       <div class="watch-main">
         <div class="player-shell">
+          <div
+            v-if="video.video_url"
+            class="player-stage"
+            tabindex="0"
+            @mousemove="handlePlayerActivity"
+            @mouseleave="scheduleOverlayHide"
+          >
           <!-- Render the player only when the backend returns a video source -->
           <video
-            v-if="video.video_url"
             ref="player"
-            controls
+            :controls="showNativeControls"
             class="player"
             :src="base + video.video_url"
             @play="handlePlay"
             @timeupdate="handleTimeUpdate"
             @pause="handlePause"
             @ended="handleEnded"
+            @loadedmetadata="handleMetadataLoaded"
+            @mouseenter="handlePlayerActivity"
           ></video>
+
+            <div
+              :class="['player-hitbox', { 'controls-visible': showNativeControls }]"
+              @click="handleSurfaceClick"
+              @dblclick.prevent="handleSurfaceDoubleClick"
+              @mousemove="handlePlayerActivity"
+            ></div>
+
+            <div
+              :class="['player-overlay', { visible: showCenterControls }]"
+            >
+              <div class="overlay-zone overlay-zone-left" aria-hidden="true">
+                <span v-if="overlayHint === 'backward'" class="overlay-burst">-10s</span>
+              </div>
+
+              <div class="overlay-center">
+                <button
+                  type="button"
+                  class="control-chip seek-chip"
+                  @click.stop="seekBy(-10)"
+                  aria-label="Go back 10 seconds"
+                >
+                  <span class="chip-icon">‹‹</span>
+                  <span class="chip-label">10</span>
+                </button>
+
+                <button
+                  type="button"
+                  class="control-chip play-chip"
+                  @click.stop="togglePlayback"
+                  :aria-label="isPlaying ? 'Pause video' : 'Play video'"
+                >
+                  {{ isPlaying ? '❚❚' : '▶' }}
+                </button>
+
+                <button
+                  type="button"
+                  class="control-chip seek-chip"
+                  @click.stop="seekBy(10)"
+                  aria-label="Go forward 10 seconds"
+                >
+                  <span class="chip-label">10</span>
+                  <span class="chip-icon">››</span>
+                </button>
+              </div>
+
+              <div class="overlay-zone overlay-zone-right" aria-hidden="true">
+                <span v-if="overlayHint === 'forward'" class="overlay-burst">+10s</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="meta-card">
@@ -138,7 +197,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, watch } from 'vue';
+import { computed, ref, onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import api from '../src/services/api';
 import { useAuth } from '../src/store/auth';
@@ -162,6 +221,14 @@ const base = 'http://localhost:5000';
 const hasCountedView = ref(false);
 const lastSavedSecond = ref(0);
 const historySaveInFlight = ref(false);
+const isPlaying = ref(false);
+const showCenterControls = ref(false);
+const showNativeControls = ref(true);
+const overlayHint = ref('');
+const centerControlsHideTimer = ref(null);
+const nativeControlsHideTimer = ref(null);
+const overlayHintTimer = ref(null);
+const surfaceClickTimer = ref(null);
 const pageSize = 5;
 
 // Prevent creators from subscribing to their own channel.
@@ -243,6 +310,10 @@ const fetchSubscription = async () => {
 
 // Count one view per watch-page visit.
 const handlePlay = async () => {
+  isPlaying.value = true;
+  showCenterOverlay();
+  showPlayerOverlay();
+
   if (hasCountedView.value || !route.params.id) return;
 
   try {
@@ -289,16 +360,235 @@ const saveWatchProgress = async (force = false, overrideProgress = null) => {
 };
 
 const handleTimeUpdate = () => {
+  isPlaying.value = !player.value?.paused;
   saveWatchProgress(false);
 };
 
 const handlePause = () => {
+  isPlaying.value = false;
+  showCenterControls.value = true;
+  showPlayerOverlay();
   saveWatchProgress(true);
 };
 
 const handleEnded = () => {
   if (!player.value) return;
+  isPlaying.value = false;
+  showCenterControls.value = true;
+  showPlayerOverlay();
   saveWatchProgress(true, Number(player.value.duration) || 0);
+};
+
+const clearOverlayTimers = () => {
+  if (centerControlsHideTimer.value) {
+    clearTimeout(centerControlsHideTimer.value);
+    centerControlsHideTimer.value = null;
+  }
+
+  if (nativeControlsHideTimer.value) {
+    clearTimeout(nativeControlsHideTimer.value);
+    nativeControlsHideTimer.value = null;
+  }
+
+  if (overlayHintTimer.value) {
+    clearTimeout(overlayHintTimer.value);
+    overlayHintTimer.value = null;
+  }
+
+  if (surfaceClickTimer.value) {
+    clearTimeout(surfaceClickTimer.value);
+    surfaceClickTimer.value = null;
+  }
+};
+
+const scheduleOverlayHide = () => {
+  if (!isPlaying.value) {
+    showNativeControls.value = true;
+    return;
+  }
+
+  if (nativeControlsHideTimer.value) {
+    clearTimeout(nativeControlsHideTimer.value);
+  }
+
+  nativeControlsHideTimer.value = setTimeout(() => {
+    showNativeControls.value = false;
+  }, 2000);
+};
+
+const showPlayerOverlay = () => {
+  showNativeControls.value = true;
+  scheduleOverlayHide();
+};
+
+const scheduleCenterControlsHide = () => {
+  if (!isPlaying.value) {
+    showCenterControls.value = true;
+    return;
+  }
+
+  if (centerControlsHideTimer.value) {
+    clearTimeout(centerControlsHideTimer.value);
+  }
+
+  centerControlsHideTimer.value = setTimeout(() => {
+    showCenterControls.value = false;
+  }, 1200);
+};
+
+const showCenterOverlay = () => {
+  showCenterControls.value = true;
+  scheduleCenterControlsHide();
+};
+
+const handlePlayerActivity = () => {
+  if (!isPlaying.value) {
+    showCenterControls.value = true;
+  }
+  showPlayerOverlay();
+};
+
+const flashOverlayHint = (direction) => {
+  overlayHint.value = direction;
+  showCenterOverlay();
+  showPlayerOverlay();
+
+  if (overlayHintTimer.value) {
+    clearTimeout(overlayHintTimer.value);
+  }
+
+  overlayHintTimer.value = setTimeout(() => {
+    overlayHint.value = '';
+  }, 900);
+};
+
+const togglePlayback = async () => {
+  if (!player.value) return;
+
+  showCenterOverlay();
+  showPlayerOverlay();
+
+  if (player.value.paused) {
+    await player.value.play();
+  } else {
+    player.value.pause();
+  }
+};
+
+const getSurfaceSeekDirection = (event) => {
+  const rect = event.currentTarget.getBoundingClientRect();
+  const offsetX = event.clientX - rect.left;
+
+  if (offsetX < rect.width * 0.35) {
+    return -10;
+  }
+
+  if (offsetX > rect.width * 0.65) {
+    return 10;
+  }
+
+  return 0;
+};
+
+const handleSurfaceClick = (event) => {
+  if (surfaceClickTimer.value) {
+    clearTimeout(surfaceClickTimer.value);
+    surfaceClickTimer.value = null;
+  }
+
+  handlePlayerActivity();
+
+  surfaceClickTimer.value = setTimeout(() => {
+    togglePlayback();
+    surfaceClickTimer.value = null;
+  }, 220);
+};
+
+const handleSurfaceDoubleClick = (event) => {
+  if (surfaceClickTimer.value) {
+    clearTimeout(surfaceClickTimer.value);
+    surfaceClickTimer.value = null;
+  }
+
+  const direction = getSurfaceSeekDirection(event);
+
+  if (direction !== 0) {
+    seekBy(direction);
+    return;
+  }
+
+  togglePlayback();
+};
+
+const seekBy = (seconds) => {
+  if (!player.value) return;
+
+  const duration = Number(player.value.duration) || 0;
+  const currentTime = Number(player.value.currentTime) || 0;
+  const nextTime = Math.min(duration || currentTime + seconds, Math.max(0, currentTime + seconds));
+
+  player.value.currentTime = nextTime;
+  flashOverlayHint(seconds < 0 ? 'backward' : 'forward');
+  saveWatchProgress(true, nextTime);
+};
+
+const handleMetadataLoaded = () => {
+  isPlaying.value = !player.value?.paused;
+  showCenterControls.value = !isPlaying.value;
+  showPlayerOverlay();
+};
+
+const adjustVolumeBy = (delta) => {
+  if (!player.value) return;
+
+  const nextVolume = Math.max(0, Math.min(1, Number(player.value.volume || 0) + delta));
+  player.value.volume = nextVolume;
+  if (nextVolume > 0) {
+    player.value.muted = false;
+  }
+  showPlayerOverlay();
+};
+
+const handlePlayerKeydown = (event) => {
+  if (!player.value) return;
+
+  if (event.altKey || event.ctrlKey || event.metaKey) {
+    return;
+  }
+
+  const activeTag = document.activeElement?.tagName;
+  if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') {
+    return;
+  }
+
+  if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    seekBy(10);
+    return;
+  }
+
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    seekBy(-10);
+    return;
+  }
+
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    adjustVolumeBy(0.1);
+    return;
+  }
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    adjustVolumeBy(-0.1);
+    return;
+  }
+
+  if (event.code === 'Space') {
+    event.preventDefault();
+    togglePlayback();
+  }
 };
 
 const toggleLike = async () => {
@@ -359,6 +649,11 @@ const loadPageData = async () => {
   currentPage.value = 1;
   lastSavedSecond.value = 0;
   historySaveInFlight.value = false;
+  isPlaying.value = false;
+  showCenterControls.value = false;
+  showNativeControls.value = true;
+  overlayHint.value = '';
+  clearOverlayTimers();
 
   await Promise.all([
     fetchVideo(),
@@ -371,6 +666,14 @@ const loadPageData = async () => {
 };
 
 onMounted(loadPageData);
+onMounted(() => {
+  window.addEventListener('keydown', handlePlayerKeydown);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handlePlayerKeydown);
+  clearOverlayTimers();
+});
 
 watch(() => route.params.id, loadPageData);
 watch(() => route.query.counted, () => {
@@ -383,6 +686,10 @@ watch(totalPages, (value) => {
   if (currentPage.value > value) {
     currentPage.value = value;
   }
+});
+
+watch(player, () => {
+  showPlayerOverlay();
 });
 </script>
 
@@ -424,12 +731,130 @@ watch(totalPages, (value) => {
   background: #0f1014;
 }
 
+.player-stage {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #000;
+  outline: none;
+}
+
 .player {
   width: 100%;
   max-height: 480px;
   display: block;
-  border-radius: 20px;
   background: #000;
+}
+
+.player-hitbox {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.player-hitbox.controls-visible {
+  pointer-events: none;
+}
+
+.player-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+  background:
+    radial-gradient(circle at center, rgba(0, 0, 0, 0.04), transparent 34%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.08), transparent 28%, transparent 72%, rgba(0, 0, 0, 0.08));
+}
+
+.player-overlay.visible {
+  opacity: 1;
+}
+
+.overlay-zone {
+  position: relative;
+  height: 100%;
+}
+
+.overlay-zone-left {
+  background: radial-gradient(circle at 26% 50%, rgba(255, 255, 255, 0.02), transparent 32%);
+}
+
+.overlay-zone-right {
+  background: radial-gradient(circle at 74% 50%, rgba(255, 255, 255, 0.02), transparent 32%);
+}
+
+.overlay-center {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 18px;
+  pointer-events: auto;
+}
+
+.control-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 68px;
+  height: 68px;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+  transition: transform 160ms ease, background 160ms ease, opacity 160ms ease;
+}
+
+.control-chip:hover {
+  transform: scale(1.04);
+}
+
+.play-chip {
+  width: 88px;
+  height: 88px;
+  background: linear-gradient(135deg, rgba(255, 49, 49, 0.1), rgba(191, 12, 36, 0.1));
+  font-size: 2rem;
+}
+
+.seek-chip {
+  background: rgba(17, 19, 24, 0.1);
+  font-weight: 800;
+}
+
+.chip-icon {
+  font-size: 1.08rem;
+  letter-spacing: -0.08em;
+}
+
+.chip-label {
+  font-size: 0.98rem;
+}
+
+.overlay-burst {
+  position: absolute;
+  top: 50%;
+  padding: 12px 16px;
+  border-radius: 999px;
+  background: rgba(15, 16, 20, 0.42);
+  color: #fff;
+  font-weight: 800;
+  backdrop-filter: blur(14px);
+  transform: translateY(-50%);
+}
+
+.overlay-zone-left .overlay-burst {
+  left: 24px;
+}
+
+.overlay-zone-right .overlay-burst {
+  right: 24px;
 }
 
 .meta-card,
@@ -656,6 +1081,21 @@ watch(totalPages, (value) => {
 @media (max-width: 720px) {
   .watch-page {
     padding-inline: 18px;
+  }
+
+  .overlay-center {
+    gap: 10px;
+  }
+
+  .control-chip {
+    width: 54px;
+    height: 54px;
+  }
+
+  .play-chip {
+    width: 72px;
+    height: 72px;
+    font-size: 1.5rem;
   }
 
   .comment-box,
