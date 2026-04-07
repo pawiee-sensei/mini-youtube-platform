@@ -1,20 +1,127 @@
 <template>
   <section class="profile-page">
     <div class="channel-hero">
-      <div class="channel-banner"></div>
+      <button
+        type="button"
+        :class="['channel-banner', { editable: isOwner }]"
+        @click="triggerBannerUpload"
+      >
+        <img v-if="profile.banner" :src="assetUrl(profile.banner)" alt="channel banner" />
+      </button>
 
       <div class="channel-content">
-        <div class="channel-avatar">{{ username.charAt(0).toUpperCase() }}</div>
+        <button
+          type="button"
+          :class="['channel-avatar', { editable: isOwner }]"
+          @click="triggerAvatarUpload"
+        >
+          <img v-if="profile.avatar" :src="assetUrl(profile.avatar)" alt="channel avatar" />
+          <template v-else>{{ username.charAt(0).toUpperCase() }}</template>
+        </button>
 
         <div class="channel-meta">
-          <span class="eyebrow">My channel</span>
+          <span class="eyebrow">{{ isOwner ? 'My channel' : 'Creator channel' }}</span>
           <h1>{{ username }}</h1>
           <p>
             Creator hub for uploads, featured videos, and channel activity.
           </p>
         </div>
 
-        
+        <button
+          v-if="user && !isOwner"
+          class="subscribe-btn"
+          type="button"
+          @click="toggleSubscription"
+        >
+          {{ subscribed ? 'Subscribed' : 'Subscribe' }}
+        </button>
+      </div>
+    </div>
+
+    <input
+      ref="avatarInput"
+      type="file"
+      accept="image/*"
+      class="hidden-file-input"
+      @change="handleAvatarChange"
+    />
+    <input
+      ref="bannerInput"
+      type="file"
+      accept="image/*"
+      class="hidden-file-input"
+      @change="handleBannerChange"
+    />
+
+    <div v-if="showAvatarCropper" class="modal-overlay">
+      <div class="modal crop-modal">
+        <div class="modal-header">
+          <div>
+            <span class="modal-eyebrow">Profile editor</span>
+            <h2>Crop Avatar</h2>
+            <p>Adjust your image inside the square frame, then save.</p>
+          </div>
+
+          <button class="modal-close" type="button" @click="closeAvatarCropper">
+            ×
+          </button>
+        </div>
+
+        <div class="cropper-body">
+          <div
+            class="crop-frame"
+            @pointerdown="startCropDrag"
+            @pointermove="onCropDrag"
+            @pointerup="endCropDrag"
+            @pointerleave="endCropDrag"
+          >
+            <img
+              v-if="avatarCropPreview"
+              ref="cropImage"
+              :src="avatarCropPreview"
+              alt="avatar crop preview"
+              class="crop-image"
+              :style="cropImageStyle"
+              @load="syncCropImageMetrics"
+              draggable="false"
+            />
+            <div class="crop-overlay"></div>
+            <div class="crop-grid">
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+
+          <label class="crop-slider">
+            <span>Zoom</span>
+            <div class="crop-controls">
+              <button type="button" class="zoom-btn" @click="adjustCropZoom(-0.1)">
+                -
+              </button>
+              <input
+                v-model="cropZoom"
+                type="range"
+                min="0.5"
+                max="3"
+                step="0.01"
+              />
+              <button type="button" class="zoom-btn" @click="adjustCropZoom(0.1)">
+                +
+              </button>
+            </div>
+          </label>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="modal-btn modal-btn-muted" @click="closeAvatarCropper">
+            Cancel
+          </button>
+          <button type="button" class="modal-btn modal-btn-primary" @click="saveAvatarCrop">
+            Save
+          </button>
+        </div>
       </div>
     </div>
 
@@ -28,7 +135,7 @@
     <div class="channel-actions">
         <div class="tabs">
             <button
-                v-for="tab in tabs"
+                v-for="tab in visibleTabs"
                 :key="tab"
                 :class="['tab', { active: activeTab === tab }]"
                 @click="activeTab = tab"
@@ -54,7 +161,12 @@
     </div>
 
     <div v-if="videos.length" class="videos">
-      <article v-for="video in videos" :key="video.id" class="video-card">
+      <article
+        v-for="video in videos"
+        :key="video.id"
+        class="video-card"
+        @click="goToVideo(video.id)"
+      >
         <div class="video-thumb">
             <img
                 v-if="video.thumbnail_url"
@@ -74,8 +186,8 @@
         </div>
 
         <div v-if="isOwner" class="video-actions">
-            <button type="button" @click="openEdit(video)">Edit</button>
-            <button type="button" @click="deleteVideo(video.id)">Delete</button>
+            <button type="button" @click.stop="openEdit(video)">Edit</button>
+            <button type="button" @click.stop="deleteVideo(video.id)">Delete</button>
         </div>
 
       </article>
@@ -324,6 +436,27 @@ const router = useRouter();
 
 const videos = ref([]);
 const username = ref('User');
+const profile = ref({
+  avatar: null,
+  banner: null
+});
+const subscribed = ref(false);
+const subscriberCount = ref(0);
+const avatarInput = ref(null);
+const bannerInput = ref(null);
+const cropImage = ref(null);
+const showAvatarCropper = ref(false);
+const avatarCropPreview = ref('');
+const cropZoom = ref(1);
+const cropOffsetX = ref(0);
+const cropOffsetY = ref(0);
+const cropDragging = ref(false);
+const cropStartX = ref(0);
+const cropStartY = ref(0);
+const cropBaseOffsetX = ref(0);
+const cropBaseOffsetY = ref(0);
+const cropNaturalWidth = ref(0);
+const cropNaturalHeight = ref(0);
 
 const { user } = useAuth();
 
@@ -337,11 +470,39 @@ const isOwner = computed(() => {
   return user.value && user.value.id == route.params.id;
 });
 
+const visibleTabs = computed(() => {
+  return isOwner.value ? tabs : tabs.filter((tab) => tab !== 'History');
+});
+
 const channelStats = computed(() => [
   { label: 'Videos', value: videos.value.length || '0' },
-  { label: 'Subscribers', value: isOwner.value ? '1.2K' : '842' },
+  { label: 'Subscribers', value: subscriberCount.value || '0' },
   { label: 'Total views', value: isOwner.value ? '36.8K' : '21.4K' }
 ]);
+
+const assetUrl = (path) => {
+  if (!path) return null;
+  return `http://localhost:5000${path}`;
+};
+
+const cropBaseScale = computed(() => {
+  const frameSize = 320;
+
+  if (!cropNaturalWidth.value || !cropNaturalHeight.value) {
+    return 1;
+  }
+
+  return Math.max(
+    frameSize / cropNaturalWidth.value,
+    frameSize / cropNaturalHeight.value
+  );
+});
+
+const cropImageStyle = computed(() => ({
+  width: cropNaturalWidth.value ? `${cropNaturalWidth.value}px` : 'auto',
+  height: cropNaturalHeight.value ? `${cropNaturalHeight.value}px` : 'auto',
+  transform: `translate(-50%, -50%) translate(${cropOffsetX.value}px, ${cropOffsetY.value}px) scale(${cropBaseScale.value * cropZoom.value})`
+}));
 
 const fetchVideos = async () => {
   const res = await api.get(`/videos/user/${route.params.id}`);
@@ -352,11 +513,216 @@ const fetchVideos = async () => {
   }
 };
 
+const fetchProfile = async () => {
+  try {
+    const res = await api.get(`/auth/profile/${route.params.id}`);
+    profile.value = {
+      avatar: res.data.user.avatar,
+      banner: res.data.user.banner
+    };
+    username.value = res.data.user.username || 'Creator Channel';
+  } catch (err) {
+    profile.value = {
+      avatar: null,
+      banner: null
+    };
+    username.value = 'Creator Channel';
+  }
+};
+
+const fetchSubscription = async () => {
+  if (!user.value || isOwner.value) {
+    subscribed.value = false;
+    subscriberCount.value = 0;
+    return;
+  }
+
+  try {
+    const res = await api.get(`/subscriptions/${route.params.id}`);
+    subscribed.value = res.data.subscribed;
+    subscriberCount.value = res.data.count;
+  } catch {
+    subscribed.value = false;
+    subscriberCount.value = 0;
+  }
+};
+
+const toggleSubscription = async () => {
+  if (!user.value || isOwner.value) return;
+
+  try {
+    const res = await api.post(`/subscriptions/${route.params.id}`);
+    subscribed.value = res.data.subscribed;
+    subscriberCount.value = res.data.count;
+  } catch (err) {
+    console.error('SUBSCRIPTION ERROR:', err);
+  }
+};
+
+const triggerAvatarUpload = () => {
+  if (!isOwner.value) return;
+  avatarInput.value?.click();
+};
+
+const triggerBannerUpload = () => {
+  if (!isOwner.value) return;
+  bannerInput.value?.click();
+};
+
+const openAvatarCropper = (file) => {
+  if (!file) return;
+
+  avatarCropPreview.value = URL.createObjectURL(file);
+  cropZoom.value = 1;
+  cropOffsetX.value = 0;
+  cropOffsetY.value = 0;
+  cropNaturalWidth.value = 0;
+  cropNaturalHeight.value = 0;
+  showAvatarCropper.value = true;
+};
+
+const closeAvatarCropper = () => {
+  if (avatarCropPreview.value) {
+    URL.revokeObjectURL(avatarCropPreview.value);
+  }
+
+  avatarCropPreview.value = '';
+  showAvatarCropper.value = false;
+  cropZoom.value = 1;
+  cropOffsetX.value = 0;
+  cropOffsetY.value = 0;
+  cropDragging.value = false;
+};
+
+const syncCropImageMetrics = () => {
+  const img = cropImage.value;
+  if (!img) return;
+
+  cropNaturalWidth.value = img.naturalWidth;
+  cropNaturalHeight.value = img.naturalHeight;
+};
+
+const startCropDrag = (event) => {
+  cropDragging.value = true;
+  cropStartX.value = event.clientX;
+  cropStartY.value = event.clientY;
+  cropBaseOffsetX.value = cropOffsetX.value;
+  cropBaseOffsetY.value = cropOffsetY.value;
+};
+
+const onCropDrag = (event) => {
+  if (!cropDragging.value) return;
+
+  cropOffsetX.value = cropBaseOffsetX.value + (event.clientX - cropStartX.value);
+  cropOffsetY.value = cropBaseOffsetY.value + (event.clientY - cropStartY.value);
+};
+
+const endCropDrag = () => {
+  cropDragging.value = false;
+};
+
+const adjustCropZoom = (delta) => {
+  const nextZoom = Number(cropZoom.value) + delta;
+  cropZoom.value = Math.min(3, Math.max(0.5, Number(nextZoom.toFixed(2))));
+};
+
+const uploadProfileImage = async (field, file) => {
+  if (!file || !isOwner.value) return;
+
+  const formData = new FormData();
+  formData.append(field, file);
+
+  try {
+    const res = await api.put('/auth/profile/images', formData);
+    profile.value = {
+      avatar: res.data.user.avatar,
+      banner: res.data.user.banner
+    };
+  } catch (err) {
+    console.error('PROFILE IMAGE UPLOAD ERROR:', err);
+    alert('Image upload failed');
+  }
+};
+
+const handleAvatarChange = async (event) => {
+  const file = event.target.files?.[0];
+  openAvatarCropper(file);
+  event.target.value = '';
+};
+
+const handleBannerChange = async (event) => {
+  const file = event.target.files?.[0];
+  await uploadProfileImage('banner', file);
+  event.target.value = '';
+};
+
+const saveAvatarCrop = async () => {
+  if (!cropNaturalWidth.value || !cropNaturalHeight.value) return;
+
+  const frameSize = 320;
+  const outputSize = 512;
+  const ratio = outputSize / frameSize;
+  const drawScale = cropBaseScale.value * cropZoom.value;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = outputSize;
+  canvas.height = outputSize;
+
+  const context = canvas.getContext('2d');
+  if (!context) return;
+
+  const drawWidth = cropNaturalWidth.value * drawScale * ratio;
+  const drawHeight = cropNaturalHeight.value * drawScale * ratio;
+  const dx = (outputSize - drawWidth) / 2 + cropOffsetX.value * ratio;
+  const dy = (outputSize - drawHeight) / 2 + cropOffsetY.value * ratio;
+
+  const image = new Image();
+  image.src = avatarCropPreview.value;
+
+  await new Promise((resolve, reject) => {
+    image.onload = resolve;
+    image.onerror = reject;
+  });
+
+  context.drawImage(image, dx, dy, drawWidth, drawHeight);
+
+  const blob = await new Promise((resolve) => {
+    canvas.toBlob(resolve, 'image/png');
+  });
+
+  if (!blob) return;
+
+  const croppedFile = new File([blob], 'avatar.png', { type: 'image/png' });
+  await uploadProfileImage('avatar', croppedFile);
+  closeAvatarCropper();
+};
+
+const goToVideo = (id) => {
+  router.push(`/watch/${id}`);
+};
+
 const goUpload = () => {
   router.push('/dashboard');
 };
 
-onMounted(fetchVideos);
+const loadProfile = async () => {
+  await fetchProfile();
+  await fetchVideos();
+  await fetchSubscription();
+};
+
+onMounted(loadProfile);
+
+watch(() => route.params.id, async () => {
+  activeTab.value = 'Videos';
+  await loadProfile();
+});
+
+watch(visibleTabs, (tabsList) => {
+  if (!tabsList.includes(activeTab.value)) {
+    activeTab.value = tabsList[0] || 'Videos';
+  }
+});
 </script>
 
 <style scoped>
@@ -554,10 +920,23 @@ onMounted(fetchVideos);
 }
 
 .channel-banner {
+  width: 100%;
+  border: none;
   min-height: 210px;
+  padding: 0;
+  display: block;
+  cursor: default;
+  overflow: hidden;
   background:
     radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.22), transparent 20%),
     linear-gradient(135deg, #ff3131, #811320 45%, #1b1d25);
+}
+
+.channel-banner img {
+  width: 100%;
+  height: 210px;
+  display: block;
+  object-fit: cover;
 }
 
 .channel-content {
@@ -573,13 +952,141 @@ onMounted(fetchVideos);
   width: 108px;
   height: 108px;
   border-radius: 28px;
+  padding: 0;
+  border: 6px solid #fff;
   display: grid;
   place-items: center;
   background: linear-gradient(135deg, #111215, #353841);
-  border: 6px solid #fff;
   color: #fff;
   font-size: 2.4rem;
   font-weight: 800;
+}
+
+.channel-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 22px;
+  object-fit: cover;
+}
+
+.channel-avatar.editable,
+.channel-banner.editable {
+  cursor: pointer;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.crop-modal {
+  width: min(100%, 560px);
+}
+
+.cropper-body {
+  display: grid;
+  gap: 18px;
+}
+
+.crop-frame {
+  position: relative;
+  width: min(100%, 320px);
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 28px;
+  background: #0f1014;
+  touch-action: none;
+  cursor: grab;
+}
+
+.crop-frame:active {
+  cursor: grabbing;
+}
+
+.crop-image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  max-height: none;
+  transform-origin: center;
+  user-select: none;
+}
+
+.crop-overlay {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  border-radius: 28px;
+  box-shadow: inset 0 0 0 999px rgba(0, 0, 0, 0.22);
+  pointer-events: none;
+}
+
+.crop-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.crop-grid span {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.crop-grid span:nth-child(1),
+.crop-grid span:nth-child(2) {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.crop-grid span:nth-child(1) {
+  left: 33.333%;
+}
+
+.crop-grid span:nth-child(2) {
+  left: 66.666%;
+}
+
+.crop-grid span:nth-child(3),
+.crop-grid span:nth-child(4) {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.crop-grid span:nth-child(3) {
+  top: 33.333%;
+}
+
+.crop-grid span:nth-child(4) {
+  top: 66.666%;
+}
+
+.crop-slider {
+  display: grid;
+  gap: 8px;
+  color: #252a33;
+  font-weight: 700;
+}
+
+.crop-controls {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.zoom-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 999px;
+  background: #edf0f4;
+  color: #111318;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .eyebrow {
@@ -605,6 +1112,17 @@ onMounted(fetchVideos);
 .stat-box span,
 .empty-state p {
   color: #66707e;
+}
+
+.subscribe-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #111318, #30343d);
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .upload-btn {
@@ -658,6 +1176,7 @@ onMounted(fetchVideos);
   overflow: hidden;
   border-radius: 22px;
   background: #f4f6f8;
+  cursor: pointer;
 }
 
 .video-thumb {

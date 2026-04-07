@@ -22,8 +22,34 @@ export const findUserByEmail = async (email) => {
 
 export const findUserById = async (id) => {
   const [rows] = await pool.query(
-    'SELECT id, username, email, role FROM users WHERE id = ?',
+    'SELECT id, username, email, role, avatar, banner FROM users WHERE id = ?',
     [id]
   );
   return rows[0];
+};
+
+export const updateUserImages = async ({ id, avatar, banner }) => {
+  const fields = [];
+  const values = [];
+
+  if (avatar !== undefined) {
+    fields.push('avatar = ?');
+    values.push(avatar);
+  }
+
+  if (banner !== undefined) {
+    fields.push('banner = ?');
+    values.push(banner);
+  }
+
+  if (!fields.length) return 0;
+
+  values.push(id);
+
+  const [result] = await pool.query(
+    `UPDATE users SET ${fields.join(', ')} WHERE id = ?`,
+    values
+  );
+
+  return result.affectedRows;
 };

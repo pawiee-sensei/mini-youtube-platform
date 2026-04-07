@@ -19,7 +19,13 @@
           <h1>{{ video.title }}</h1>
 
           <div class="sub-meta">
-            <span>{{ video.uploader_username || 'MiniYouTube Creator' }}</span>
+            <button
+              class="creator-link"
+              type="button"
+              @click="goToProfile(video.user_id)"
+            >
+              {{ video.uploader_username || 'MiniYouTube Creator' }}
+            </button>
             <span>{{ video.views || 0 }} views</span>
           </div>
 
@@ -289,6 +295,11 @@ const goToVideo = (id) => {
   router.push(`/watch/${id}`);
 };
 
+const goToProfile = (userId) => {
+  if (!userId) return;
+  router.push(`/profile/${userId}`);
+};
+
 const loadPageData = async () => {
   currentPage.value = 1;
 
@@ -395,8 +406,23 @@ watch(totalPages, (value) => {
 .sub-meta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 12px;
   font-size: 0.95rem;
+}
+
+.creator-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #cc1023;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.creator-link:hover {
+  text-decoration: underline;
 }
 
 .channel-bar {

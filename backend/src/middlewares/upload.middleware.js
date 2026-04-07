@@ -5,8 +5,10 @@ import fs from 'fs';
 // Ensure folders exist
 const videoDir = 'uploads/videos';
 const thumbDir = 'uploads/thumbnails';
+const avatarDir = 'uploads/avatars';
+const bannerDir = 'uploads/banners';
 
-[videoDir, thumbDir].forEach(dir => {
+[videoDir, thumbDir, avatarDir, bannerDir].forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
@@ -15,6 +17,10 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     if (file.fieldname === 'video') {
       cb(null, videoDir);
+    } else if (file.fieldname === 'avatar') {
+      cb(null, avatarDir);
+    } else if (file.fieldname === 'banner') {
+      cb(null, bannerDir);
     } else {
       cb(null, thumbDir);
     }

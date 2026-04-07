@@ -1,6 +1,11 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { createUser, findUserByEmail, findUserById } from '../services/auth.service.js';
+import {
+  createUser,
+  findUserByEmail,
+  findUserById,
+  updateUserImages
+} from '../services/auth.service.js';
 
 // REGISTER
 export const register = async (req, res) => {
@@ -44,7 +49,9 @@ export const login = async (req, res) => {
       user: {
         id: user.id,
         username: user.username,
-        role: user.role
+        role: user.role,
+        avatar: user.avatar,
+        banner: user.banner
       }
     });
   } catch (err) {
@@ -62,7 +69,62 @@ export const getMe = async (req, res) => {
       user: {
         id: user.id,
         username: user.username,
-        role: user.role
+        role: user.role,
+        avatar: user.avatar,
+        banner: user.banner
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const getProfile = async (req, res) => {
+  try {
+    const user = await findUserById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        avatar: user.avatar,
+        banner: user.banner
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+export const updateProfileImages = async (req, res) => {
+  try {
+    const avatarFile = req.files?.avatar?.[0];
+    const bannerFile = req.files?.banner?.[0];
+
+    if (!avatarFile && !bannerFile) {
+      return res.status(400).json({ error: 'No image uploaded' });
+    }
+
+    await updateUserImages({
+      id: req.user.id,
+      avatar: avatarFile ? `/uploads/avatars/${avatarFile.filename}` : undefined,
+      banner: bannerFile ? `/uploads/banners/${bannerFile.filename}` : undefined
+    });
+
+    const user = await findUserById(req.user.id);
+
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        avatar: user.avatar,
+        banner: user.banner
       }
     });
   } catch (err) {
