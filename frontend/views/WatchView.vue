@@ -8,10 +8,14 @@
           <!-- Render the player only when the backend returns a video source -->
           <video
             v-if="video.video_url"
+            ref="player"
             controls
             class="player"
             :src="base + video.video_url"
             @play="handlePlay"
+            @timeupdate="handleTimeUpdate"
+            @pause="handlePause"
+            @ended="handleEnded"
           ></video>
         </div>
 
@@ -149,12 +153,15 @@ const comments = ref([]);
 const newComment = ref('');
 const likesCount = ref(0);
 const liked = ref(false);
+const player = ref(null);
 const currentPage = ref(1);
 const subscribed = ref(false);
 const subscriberCount = ref(0);
 
 const base = 'http://localhost:5000';
 const hasCountedView = ref(false);
+const lastSavedSecond = ref(0);
+const historySaveInFlight = ref(false);
 const pageSize = 5;
 
 // Prevent creators from subscribing to their own channel.
@@ -192,6 +199,7 @@ const fetchVideo = async () => {
   const res = await api.get(`/videos/${route.params.id}`);
   video.value = res.data;
   hasCountedView.value = route.query.counted === '1';
+  lastSavedSecond.value = 0;
 };
 
 const fetchAllVideos = async () => {
@@ -244,6 +252,53 @@ const handlePlay = async () => {
   } catch (err) {
     console.error('VIEW COUNT ERROR:', err);
   }
+};
+
+const saveWatchProgress = async (force = false, overrideProgress = null) => {
+  if (!isAuthenticated() || !route.params.id || !player.value) return;
+
+  const durationSeconds = Number(player.value.duration);
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return;
+
+  const progressSeconds = overrideProgress ?? Number(player.value.currentTime);
+  if (!Number.isFinite(progressSeconds) || progressSeconds < 0) return;
+
+  const roundedProgress = Math.min(durationSeconds, Math.max(0, progressSeconds));
+  const roundedDuration = Math.max(0, durationSeconds);
+
+  if (!force && Math.abs(roundedProgress - lastSavedSecond.value) < 5) {
+    return;
+  }
+
+  if (historySaveInFlight.value) {
+    return;
+  }
+
+  try {
+    historySaveInFlight.value = true;
+    lastSavedSecond.value = roundedProgress;
+    await api.post(`/history/${route.params.id}`, {
+      progressSeconds: roundedProgress,
+      durationSeconds: roundedDuration
+    });
+  } catch (err) {
+    console.error('WATCH HISTORY SAVE ERROR:', err);
+  } finally {
+    historySaveInFlight.value = false;
+  }
+};
+
+const handleTimeUpdate = () => {
+  saveWatchProgress(false);
+};
+
+const handlePause = () => {
+  saveWatchProgress(true);
+};
+
+const handleEnded = () => {
+  if (!player.value) return;
+  saveWatchProgress(true, Number(player.value.duration) || 0);
 };
 
 const toggleLike = async () => {
@@ -302,6 +357,8 @@ const goToProfile = (userId) => {
 
 const loadPageData = async () => {
   currentPage.value = 1;
+  lastSavedSecond.value = 0;
+  historySaveInFlight.value = false;
 
   await Promise.all([
     fetchVideo(),

@@ -209,7 +209,44 @@
 
   <!----------HISTORY TAB ---------->
   <template v-else-if="activeTab === 'History'">
-    <div class="empty-state">
+    <div v-if="historyVideos.length" class="videos history-grid">
+      <article
+        v-for="item in historyVideos"
+        :key="item.video_id"
+        class="video-card history-card"
+        @click="goToVideo(item.video_id)"
+      >
+        <div class="video-thumb history-thumb">
+          <img
+            v-if="item.thumbnail_url"
+            :src="getThumbnail(item.thumbnail_url)"
+            alt="thumbnail"
+          />
+
+          <div v-else class="no-thumb">
+            No Thumbnail
+          </div>
+
+          <div
+            class="watch-progress-bar"
+            :style="{ width: `${getWatchProgressPercent(item)}%` }"
+          ></div>
+        </div>
+
+        <div class="video-info">
+          <strong>{{ item.title }}</strong>
+          <span>{{ item.uploader_username || 'MiniYouTube Creator' }}</span>
+          <span class="history-copy">
+            {{ isVideoCompleted(item) ? 'Watched' : 'Continue watching' }}
+          </span>
+          <span class="history-time">
+            {{ formatDuration(item.progress_seconds) }} / {{ formatDuration(item.duration_seconds) }}
+          </span>
+        </div>
+      </article>
+    </div>
+
+    <div v-else class="empty-state">
       <h3>No watch history</h3>
       <p>Watched videos will appear here.</p>
     </div>
@@ -435,6 +472,7 @@ const route = useRoute();
 const router = useRouter();
 
 const videos = ref([]);
+const historyVideos = ref([]);
 const username = ref('User');
 const profile = ref({
   avatar: null,
@@ -483,6 +521,32 @@ const channelStats = computed(() => [
 const assetUrl = (path) => {
   if (!path) return null;
   return `http://localhost:5000${path}`;
+};
+
+const formatDuration = (seconds) => {
+  const totalSeconds = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+
+  return `${minutes}:${String(secs).padStart(2, '0')}`;
+};
+
+const getWatchProgressPercent = (item) => {
+  const progress = Number(item.progress_seconds) || 0;
+  const duration = Number(item.duration_seconds) || 0;
+
+  if (duration <= 0) return 0;
+
+  return Math.min(100, Math.max(0, (progress / duration) * 100));
+};
+
+const isVideoCompleted = (item) => {
+  return getWatchProgressPercent(item) >= 95;
 };
 
 const cropBaseScale = computed(() => {
@@ -544,6 +608,21 @@ const fetchSubscription = async () => {
   } catch {
     subscribed.value = false;
     subscriberCount.value = 0;
+  }
+};
+
+const fetchHistory = async () => {
+  if (!user.value || !isOwner.value) {
+    historyVideos.value = [];
+    return;
+  }
+
+  try {
+    const res = await api.get(`/history/user/${route.params.id}`);
+    historyVideos.value = res.data;
+  } catch (err) {
+    console.error('WATCH HISTORY FETCH ERROR:', err);
+    historyVideos.value = [];
   }
 };
 
@@ -709,6 +788,7 @@ const loadProfile = async () => {
   await fetchProfile();
   await fetchVideos();
   await fetchSubscription();
+  await fetchHistory();
 };
 
 onMounted(loadProfile);
@@ -1172,11 +1252,19 @@ watch(visibleTabs, (tabsList) => {
   gap: 16px;
 }
 
+.history-grid {
+  align-items: start;
+}
+
 .video-card {
   overflow: hidden;
   border-radius: 22px;
   background: #f4f6f8;
   cursor: pointer;
+}
+
+.history-card {
+  position: relative;
 }
 
 .video-thumb {
@@ -1203,6 +1291,24 @@ watch(visibleTabs, (tabsList) => {
   background: #ddd;
   color: #555;
   font-size: 12px;
+}
+
+.watch-progress-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 5px;
+  background: linear-gradient(90deg, #ff3131, #d5142a);
+  border-radius: 0 999px 999px 0;
+}
+
+.history-copy {
+  color: #d21c31;
+  font-weight: 700;
+}
+
+.history-time {
+  font-size: 0.84rem;
 }
 
 
