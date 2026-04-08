@@ -5,11 +5,20 @@ import {
   isSubscribed
 } from '../services/subscription.service.js';
 
+const getSubscriptionSummary = async (subscriberId, channelId) => {
+  const [count, subscribed] = await Promise.all([
+    getSubscriberCount(channelId),
+    isSubscribed(subscriberId, channelId)
+  ]);
+
+  return { count, subscribed };
+};
+
 export const getSubscriptionStatus = async (req, res) => {
   try {
-    const channelId = req.params.channelId;
-    const count = await getSubscriberCount(channelId);
-    const subscribed = await isSubscribed(req.user.id, channelId);
+    const { channelId } = req.params;
+    const { id: subscriberId } = req.user;
+    const { count, subscribed } = await getSubscriptionSummary(subscriberId, channelId);
 
     res.json({ count, subscribed });
   } catch (err) {
@@ -19,8 +28,8 @@ export const getSubscriptionStatus = async (req, res) => {
 
 export const toggleSubscription = async (req, res) => {
   try {
-    const subscriberId = req.user.id;
-    const channelId = req.params.channelId;
+    const { channelId } = req.params;
+    const { id: subscriberId } = req.user;
     const subscribed = await isSubscribed(subscriberId, channelId);
 
     if (subscribed) {
@@ -30,6 +39,7 @@ export const toggleSubscription = async (req, res) => {
     }
 
     const count = await getSubscriberCount(channelId);
+
     res.json({
       count,
       subscribed: !subscribed

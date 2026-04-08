@@ -10,7 +10,13 @@ import {
 // REGISTER
 export const register = async (req, res) => {
   try {
-    const { username, email, password, role } = req.body;
+    const { username, email, password } = req.body;
+
+    if (!username || !email || !password) {
+      return res.status(400).json({
+        error: 'Username, email, and password are required'
+      });
+    }
 
     const existing = await findUserByEmail(email);
     if (existing) {
@@ -20,7 +26,7 @@ export const register = async (req, res) => {
       });
     }
 
-    const userId = await createUser({ username, email, password, role });
+    const userId = await createUser({ username, email, password });
 
     res.json({ message: 'User created', userId });
 
@@ -33,10 +39,20 @@ export const register = async (req, res) => {
 
 export const login = async (req, res) => {
   try {
-    const user = await findUserByEmail(req.body.email);
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({ error: 'JWT secret is not configured' });
+    }
+
+    const user = await findUserByEmail(email);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const isMatch = await bcrypt.compare(req.body.password, user.password);
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ error: 'Invalid credentials' });
 
     const token = jwt.sign(
