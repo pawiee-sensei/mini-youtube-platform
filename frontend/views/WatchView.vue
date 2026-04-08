@@ -142,6 +142,38 @@
             <div v-for="comment in comments" :key="comment.id" class="comment">
               <strong>{{ comment.username }}</strong>
               <p>{{ comment.content }}</p>
+              <div class="comment-actions">
+                <button
+                  type="button"
+                  :class="['comment-reaction-btn', { active: comment.userReaction === 'like' }]"
+                  @click="toggleCommentReaction(comment, 'like')"
+                  :aria-pressed="comment.userReaction === 'like'"
+                >
+                  <span class="comment-reaction-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M8 11v9" />
+                      <path d="M8 20H5a2 2 0 0 1-2-2v-5.5A1.5 1.5 0 0 1 4.5 11H8Z" />
+                      <path d="M14 11V6.5A2.5 2.5 0 0 0 11.5 4L8 11v9h8.2a2 2 0 0 0 2-1.6l1.2-5.5A2 2 0 0 0 17.45 11Z" />
+                    </svg>
+                  </span>
+                  <span>{{ comment.likesCount || 0 }}</span>
+                </button>
+                <button
+                  type="button"
+                  :class="['comment-reaction-btn', { active: comment.userReaction === 'dislike' }]"
+                  @click="toggleCommentReaction(comment, 'dislike')"
+                  :aria-pressed="comment.userReaction === 'dislike'"
+                >
+                  <span class="comment-reaction-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M16 13V4" />
+                      <path d="M16 4h3a2 2 0 0 1 2 2v5.5A1.5 1.5 0 0 1 19.5 13H16Z" />
+                      <path d="M10 13v4.5A2.5 2.5 0 0 0 12.5 20l3.5-7V4H7.8a2 2 0 0 0-2 1.6l-1.2 5.5A2 2 0 0 0 6.55 13Z" />
+                    </svg>
+                  </span>
+                  <span>{{ comment.dislikesCount || 0 }}</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -309,7 +341,26 @@ const fetchLikes = async () => {
 
 const fetchComments = async () => {
   const res = await api.get(`/comments/${route.params.id}`);
-  comments.value = res.data;
+  comments.value = res.data.map(normalizeComment);
+};
+
+const normalizeComment = (comment) => {
+  return {
+    ...comment,
+    likesCount: Number(comment.likesCount || 0),
+    dislikesCount: Number(comment.dislikesCount || 0),
+    userReaction: comment.userReaction || null
+  };
+};
+
+const updateCommentInList = (updatedComment) => {
+  comments.value = comments.value.map((comment) => {
+    if (String(comment.id) !== String(updatedComment.id)) {
+      return comment;
+    }
+
+    return normalizeComment(updatedComment);
+  });
 };
 
 // Subscription status needs the uploader id from the fetched video payload.
@@ -656,6 +707,27 @@ const submitComment = async () => {
 
   newComment.value = '';
   await fetchComments();
+};
+
+const toggleCommentReaction = async (comment, reaction) => {
+  if (!isAuthenticated()) {
+    alert('Login required');
+    return;
+  }
+
+  try {
+    let res;
+
+    if (comment.userReaction === reaction) {
+      res = await api.delete(`/comments/${comment.id}/reaction`);
+    } else {
+      res = await api.post(`/comments/${comment.id}/reaction`, { reaction });
+    }
+
+    updateCommentInList(res.data);
+  } catch (err) {
+    console.error('COMMENT REACTION ERROR:', err);
+  }
 };
 
 const goToVideo = (id) => {
@@ -1122,6 +1194,59 @@ watch(player, () => {
 .comment {
   padding-bottom: 14px;
   border-bottom: 1px solid #e7ebf0;
+}
+
+.comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.comment-reaction-btn {
+  border: 1px solid #d6dde6;
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: #f6f8fa;
+  color: #526070;
+  font: inherit;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.comment-reaction-btn:hover {
+  background: #eef2f6;
+}
+
+.comment-reaction-btn.active {
+  background: #fff1f3;
+  border-color: #f3bcc6;
+  color: #b0182a;
+}
+
+.comment-reaction-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(17, 19, 24, 0.08);
+  font-size: 0.92rem;
+  line-height: 1;
+}
+
+.comment-reaction-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.comment-reaction-btn.active .comment-reaction-icon {
+  background: rgba(176, 24, 42, 0.12);
 }
 
 .comment:last-child {
