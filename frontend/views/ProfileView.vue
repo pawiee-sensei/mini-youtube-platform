@@ -512,10 +512,23 @@ const visibleTabs = computed(() => {
   return isOwner.value ? tabs : tabs.filter((tab) => tab !== 'History');
 });
 
+const totalViews = computed(() => {
+  return videos.value.reduce((sum, video) => {
+    return sum + (Number(video.views) || 0);
+  }, 0);
+});
+
+const formatCompactNumber = (value) => {
+  return new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: 1
+  }).format(Number(value) || 0);
+};
+
 const channelStats = computed(() => [
   { label: 'Videos', value: videos.value.length || '0' },
   { label: 'Subscribers', value: subscriberCount.value || '0' },
-  { label: 'Total views', value: isOwner.value ? '36.8K' : '21.4K' }
+  { label: 'Total views', value: formatCompactNumber(totalViews.value) }
 ]);
 
 const assetUrl = (path) => {
@@ -595,12 +608,6 @@ const fetchProfile = async () => {
 };
 
 const fetchSubscription = async () => {
-  if (!user.value || isOwner.value) {
-    subscribed.value = false;
-    subscriberCount.value = 0;
-    return;
-  }
-
   try {
     const res = await api.get(`/subscriptions/${route.params.id}`);
     subscribed.value = res.data.subscribed;

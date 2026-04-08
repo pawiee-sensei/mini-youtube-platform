@@ -134,6 +134,7 @@
             <input
               v-model="newComment"
               placeholder="Write a comment..."
+              @keydown.enter.prevent="submitComment"
             />
             <button @click="submitComment">Post</button>
           </div>
@@ -145,17 +146,28 @@
               :class="['comment-thread', { 'has-replies': comment.replies.length && isRepliesExpanded(comment.id) }]"
             >
               <div class="comment">
-                <div class="comment-avatar">
+                <button
+                  type="button"
+                  class="comment-avatar comment-avatar-link"
+                  @click="goToProfile(comment.user_id)"
+                  :aria-label="`${comment.username} profile`"
+                >
                   <img
                     v-if="comment.avatar"
                     :src="base + comment.avatar"
                     :alt="`${comment.username} avatar`"
                   />
                   <span v-else>{{ getCommentInitial(comment.username) }}</span>
-                </div>
+                </button>
                 <div class="comment-body">
                   <div class="comment-meta">
-                    <strong>{{ comment.username }}</strong>
+                    <button
+                      type="button"
+                      class="comment-author-link"
+                      @click="goToProfile(comment.user_id)"
+                    >
+                      {{ comment.username }}
+                    </button>
                     <span>{{ formatCommentTimestamp(comment.created_at) }}</span>
                   </div>
                   <p class="comment-copy">{{ comment.content }}</p>
@@ -212,13 +224,20 @@
                       <input
                         v-model="replyDrafts[comment.id]"
                         :placeholder="`Reply to ${comment.username}...`"
+                        @keydown.enter.prevent="submitReply(comment.id)"
                       />
-                    </div>
-                    <div class="reply-box-actions">
-                      <button type="button" class="reply-cancel-btn" @click="closeReplyComposer">
-                        Cancel
+                      <button
+                        type="button"
+                        class="reply-send-btn"
+                        @click="submitReply(comment.id)"
+                        :disabled="!replyDrafts[comment.id]?.trim()"
+                        aria-label="Send reply"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M22 2 11 13" />
+                          <path d="m22 2-7 20-4-9-9-4Z" />
+                        </svg>
                       </button>
-                      <button type="button" @click="submitReply(comment.id)">Reply</button>
                     </div>
                   </div>
                   <button
@@ -241,17 +260,28 @@
               <div v-if="comment.replies.length && isRepliesExpanded(comment.id)" class="reply-list">
                 <div v-for="reply in comment.replies" :key="reply.id" class="comment reply-comment">
                   <div class="comment-thread-line" aria-hidden="true"></div>
-                  <div class="comment-avatar reply-avatar">
+                  <button
+                    type="button"
+                    class="comment-avatar reply-avatar comment-avatar-link"
+                    @click="goToProfile(reply.user_id)"
+                    :aria-label="`${reply.username} profile`"
+                  >
                     <img
                       v-if="reply.avatar"
                       :src="base + reply.avatar"
                       :alt="`${reply.username} avatar`"
                     />
                     <span v-else>{{ getCommentInitial(reply.username) }}</span>
-                  </div>
+                  </button>
                   <div class="comment-body">
                     <div class="comment-meta">
-                      <strong>{{ reply.username }}</strong>
+                      <button
+                        type="button"
+                        class="comment-author-link"
+                        @click="goToProfile(reply.user_id)"
+                      >
+                        {{ reply.username }}
+                      </button>
                       <span>{{ formatCommentTimestamp(reply.created_at) }}</span>
                     </div>
                     <p class="comment-copy">{{ reply.content }}</p>
@@ -491,7 +521,7 @@ const fetchComments = async () => {
   comments.value = buildCommentThreads(res.data.map(normalizeComment));
 
   expandedReplyThreads.value = comments.value.reduce((acc, comment) => {
-    acc[comment.id] = expandedReplyThreads.value[comment.id] ?? true;
+    acc[comment.id] = expandedReplyThreads.value[comment.id] ?? false;
     return acc;
   }, {});
 };
@@ -586,7 +616,7 @@ const toggleReplies = (commentId) => {
 };
 
 const isRepliesExpanded = (commentId) => {
-  return expandedReplyThreads.value[commentId] ?? true;
+  return expandedReplyThreads.value[commentId] ?? false;
 };
 
 // Subscription status needs the uploader id from the fetched video payload.
@@ -1458,7 +1488,7 @@ watch(player, () => {
   position: absolute;
   left: 20px;
   top: 48px;
-  bottom: 111px;
+  bottom: 104.5px;
   width: 2px;
   border-radius: 999px;
   background: #cbd5e1;
@@ -1487,6 +1517,12 @@ watch(player, () => {
   font-weight: 800;
   flex-shrink: 0;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.comment-avatar-link {
+  border: 0;
+  padding: 0;
+  cursor: pointer;
 }
 
 .comment-avatar img {
@@ -1520,6 +1556,20 @@ watch(player, () => {
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 4px;
+}
+
+.comment-author-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #111318;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.comment-author-link:hover {
+  text-decoration: underline;
 }
 
 .comment-meta span {
@@ -1627,7 +1677,7 @@ watch(player, () => {
 
 .reply-box-shell {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   gap: 10px;
   align-items: center;
 }
@@ -1654,16 +1704,35 @@ watch(player, () => {
   border-bottom-color: #cc1023;
 }
 
-.reply-box-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+.reply-send-btn {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #ff3131, #cc1023);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 12px 22px rgba(204, 16, 35, 0.22);
+  transition: transform 160ms ease, opacity 160ms ease, box-shadow 160ms ease;
 }
 
-.reply-cancel-btn {
-  border: 1px solid #d6dde6;
-  background: #fff;
-  color: #394452;
+.reply-send-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 26px rgba(204, 16, 35, 0.28);
+}
+
+.reply-send-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+.reply-send-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .reply-toggle {
@@ -1727,10 +1796,10 @@ watch(player, () => {
   z-index: 1;
   left: -16px;
   top: 10px;
-  width: 24px;
+  width: 28px;
   height: 12px;
-  border-left: 2px solid #cbd5e1;
-  border-bottom: 2px solid #cbd5e1;
+  border-left: 2.4px solid #cbd5e1;
+  border-bottom: 2.4px solid #cbd5e1;
   border-bottom-left-radius: 14px;
   pointer-events: none;
 }

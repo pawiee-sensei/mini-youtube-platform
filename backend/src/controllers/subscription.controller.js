@@ -7,9 +7,14 @@ import {
 import { findUserById } from '../services/auth.service.js';
 
 const getSubscriptionSummary = async (subscriberId, channelId) => {
+  const countPromise = getSubscriberCount(channelId);
+  const subscribedPromise = subscriberId
+    ? isSubscribed(subscriberId, channelId)
+    : Promise.resolve(false);
+
   const [count, subscribed] = await Promise.all([
-    getSubscriberCount(channelId),
-    isSubscribed(subscriberId, channelId)
+    countPromise,
+    subscribedPromise
   ]);
 
   return { count, subscribed };
@@ -29,7 +34,7 @@ const getChannelOrFail = async (channelId, res) => {
 export const getSubscriptionStatus = async (req, res) => {
   try {
     const { channelId } = req.params;
-    const { id: subscriberId } = req.user;
+    const subscriberId = req.user?.id ?? null;
 
     const channel = await getChannelOrFail(channelId, res);
     if (!channel) return;
