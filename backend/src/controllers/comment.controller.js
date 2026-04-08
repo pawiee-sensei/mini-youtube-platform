@@ -7,10 +7,30 @@ import {
 } from '../services/comment.service.js';
 
 export const createComment = async (req, res) => {
+  const content = String(req.body.content || '').trim();
+  const parentCommentId = req.body.parentCommentId ?? null;
+
+  if (!content) {
+    return res.status(400).json({ error: 'Comment content is required' });
+  }
+
+  if (parentCommentId !== null) {
+    const parentComment = await findCommentById(parentCommentId);
+
+    if (!parentComment || String(parentComment.video_id) !== String(req.params.videoId)) {
+      return res.status(404).json({ error: 'Parent comment not found' });
+    }
+
+    if (parentComment.parent_comment_id) {
+      return res.status(400).json({ error: 'Replies can only be added to top-level comments' });
+    }
+  }
+
   const id = await addComment({
     user_id: req.user.id,
     video_id: req.params.videoId,
-    content: req.body.content
+    parent_comment_id: parentCommentId,
+    content
   });
   res.json({ id });
 };

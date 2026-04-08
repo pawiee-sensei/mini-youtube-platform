@@ -9,7 +9,10 @@ import likeRoutes from './routes/like.routes.js';
 import subscriptionRoutes from './routes/subscription.routes.js';
 import historyRoutes from './routes/history.routes.js';
 import { ensureWatchHistoryTable } from './services/history.service.js';
-import { ensureCommentReactionsTable } from './services/comment.service.js';
+import {
+  ensureCommentReactionsTable,
+  ensureCommentRepliesSchema
+} from './services/comment.service.js';
 
 const app = express();
 
@@ -30,6 +33,10 @@ app.use('/api/history', historyRoutes);
 
 ensureWatchHistoryTable().catch((err) => {
   console.error('WATCH HISTORY TABLE ERROR:', err);
+});
+
+ensureCommentRepliesSchema().catch((err) => {
+  console.error('COMMENT REPLIES SCHEMA ERROR:', err);
 });
 
 ensureCommentReactionsTable().catch((err) => {

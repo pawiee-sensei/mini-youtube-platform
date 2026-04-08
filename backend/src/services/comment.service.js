@@ -1,5 +1,23 @@
 import pool from '../config/db.js';
 
+export const ensureCommentRepliesSchema = async () => {
+  const [columns] = await pool.query(
+    `
+      SELECT COUNT(*) AS count
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'comments'
+        AND COLUMN_NAME = 'parent_comment_id'
+    `
+  );
+
+  if (!columns[0]?.count) {
+    await pool.query(
+      'ALTER TABLE comments ADD COLUMN parent_comment_id INT NULL AFTER video_id'
+    );
+  }
+};
+
 export const ensureCommentReactionsTable = async () => {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS comment_reactions (
@@ -18,8 +36,8 @@ export const ensureCommentReactionsTable = async () => {
 
 export const addComment = async (data) => {
   const [result] = await pool.query(
-    'INSERT INTO comments (user_id, video_id, content) VALUES (?, ?, ?)',
-    [data.user_id, data.video_id, data.content]
+    'INSERT INTO comments (user_id, video_id, parent_comment_id, content) VALUES (?, ?, ?, ?)',
+    [data.user_id, data.video_id, data.parent_comment_id ?? null, data.content]
   );
   return result.insertId;
 };
@@ -52,7 +70,7 @@ export const removeCommentReaction = async ({ userId, commentId }) => {
 
 export const findCommentById = async (commentId) => {
   const [rows] = await pool.query(
-    'SELECT id, user_id, video_id, content, created_at FROM comments WHERE id = ?',
+    'SELECT id, user_id, video_id, parent_comment_id, content, created_at FROM comments WHERE id = ?',
     [commentId]
   );
 
@@ -65,6 +83,7 @@ export const getCommentsWithUser = async (videoId, userId = null) => {
       SELECT
         comments.*,
         users.username,
+        users.avatar,
         (
           SELECT COUNT(*)
           FROM comment_reactions
@@ -87,7 +106,7 @@ export const getCommentsWithUser = async (videoId, userId = null) => {
       FROM comments
       JOIN users ON comments.user_id = users.id
       WHERE comments.video_id = ?
-      ORDER BY comments.created_at DESC
+      ORDER BY comments.parent_comment_id IS NOT NULL, comments.created_at DESC
     `,
     [userId, videoId]
   );

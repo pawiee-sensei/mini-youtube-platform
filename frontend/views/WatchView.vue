@@ -126,7 +126,7 @@
         <div class="comments-panel">
           <div class="section-head">
             <h2>Comments</h2>
-            <span>{{ comments.length }}</span>
+            <span>{{ totalCommentsCount }}</span>
           </div>
 
           <!-- Only logged-in users can submit comments -->
@@ -139,40 +139,157 @@
           </div>
 
           <div v-if="comments.length" class="comments">
-            <div v-for="comment in comments" :key="comment.id" class="comment">
-              <strong>{{ comment.username }}</strong>
-              <p>{{ comment.content }}</p>
-              <div class="comment-actions">
-                <button
-                  type="button"
-                  :class="['comment-reaction-btn', { active: comment.userReaction === 'like' }]"
-                  @click="toggleCommentReaction(comment, 'like')"
-                  :aria-pressed="comment.userReaction === 'like'"
-                >
-                  <span class="comment-reaction-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M8 11v9" />
-                      <path d="M8 20H5a2 2 0 0 1-2-2v-5.5A1.5 1.5 0 0 1 4.5 11H8Z" />
-                      <path d="M14 11V6.5A2.5 2.5 0 0 0 11.5 4L8 11v9h8.2a2 2 0 0 0 2-1.6l1.2-5.5A2 2 0 0 0 17.45 11Z" />
-                    </svg>
-                  </span>
-                  <span>{{ comment.likesCount || 0 }}</span>
-                </button>
-                <button
-                  type="button"
-                  :class="['comment-reaction-btn', { active: comment.userReaction === 'dislike' }]"
-                  @click="toggleCommentReaction(comment, 'dislike')"
-                  :aria-pressed="comment.userReaction === 'dislike'"
-                >
-                  <span class="comment-reaction-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M16 13V4" />
-                      <path d="M16 4h3a2 2 0 0 1 2 2v5.5A1.5 1.5 0 0 1 19.5 13H16Z" />
-                      <path d="M10 13v4.5A2.5 2.5 0 0 0 12.5 20l3.5-7V4H7.8a2 2 0 0 0-2 1.6l-1.2 5.5A2 2 0 0 0 6.55 13Z" />
-                    </svg>
-                  </span>
-                  <span>{{ comment.dislikesCount || 0 }}</span>
-                </button>
+            <div
+              v-for="comment in comments"
+              :key="comment.id"
+              :class="['comment-thread', { 'has-replies': comment.replies.length && isRepliesExpanded(comment.id) }]"
+            >
+              <div class="comment">
+                <div class="comment-avatar">
+                  <img
+                    v-if="comment.avatar"
+                    :src="base + comment.avatar"
+                    :alt="`${comment.username} avatar`"
+                  />
+                  <span v-else>{{ getCommentInitial(comment.username) }}</span>
+                </div>
+                <div class="comment-body">
+                  <div class="comment-meta">
+                    <strong>{{ comment.username }}</strong>
+                    <span>{{ formatCommentTimestamp(comment.created_at) }}</span>
+                  </div>
+                  <p class="comment-copy">{{ comment.content }}</p>
+                  <div class="comment-actions">
+                    <button
+                      type="button"
+                      :class="['comment-reaction-btn', 'icon-only', { active: comment.userReaction === 'like' }]"
+                      @click="toggleCommentReaction(comment, 'like')"
+                      :aria-pressed="comment.userReaction === 'like'"
+                      aria-label="Like comment"
+                    >
+                      <span class="comment-reaction-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M8 11v9" />
+                          <path d="M8 20H5a2 2 0 0 1-2-2v-5.5A1.5 1.5 0 0 1 4.5 11H8Z" />
+                          <path d="M14 11V6.5A2.5 2.5 0 0 0 11.5 4L8 11v9h8.2a2 2 0 0 0 2-1.6l1.2-5.5A2 2 0 0 0 17.45 11Z" />
+                        </svg>
+                      </span>
+                      <span v-if="comment.likesCount" class="comment-reaction-count">{{ comment.likesCount }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      :class="['comment-reaction-btn', 'icon-only', { active: comment.userReaction === 'dislike' }]"
+                      @click="toggleCommentReaction(comment, 'dislike')"
+                      :aria-pressed="comment.userReaction === 'dislike'"
+                      aria-label="Dislike comment"
+                    >
+                      <span class="comment-reaction-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M16 13V4" />
+                          <path d="M16 4h3a2 2 0 0 1 2 2v5.5A1.5 1.5 0 0 1 19.5 13H16Z" />
+                          <path d="M10 13v4.5A2.5 2.5 0 0 0 12.5 20l3.5-7V4H7.8a2 2 0 0 0-2 1.6l-1.2 5.5A2 2 0 0 0 6.55 13Z" />
+                        </svg>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      class="comment-text-action"
+                      @click="toggleReplyComposer(comment.id)"
+                    >
+                      Reply
+                    </button>
+                  </div>
+                  <div v-if="replyComposerId === comment.id" class="reply-box">
+                    <div class="reply-box-shell">
+                      <div class="comment-avatar reply-composer-avatar">
+                        <img
+                          v-if="user?.avatar"
+                          :src="base + user.avatar"
+                          alt="your avatar"
+                        />
+                        <span v-else>{{ getCommentInitial(user?.username) }}</span>
+                      </div>
+                      <input
+                        v-model="replyDrafts[comment.id]"
+                        :placeholder="`Reply to ${comment.username}...`"
+                      />
+                    </div>
+                    <div class="reply-box-actions">
+                      <button type="button" class="reply-cancel-btn" @click="closeReplyComposer">
+                        Cancel
+                      </button>
+                      <button type="button" @click="submitReply(comment.id)">Reply</button>
+                    </div>
+                  </div>
+                  <button
+                    v-if="comment.replies.length"
+                    type="button"
+                    class="reply-toggle"
+                    @click="toggleReplies(comment.id)"
+                  >
+                    <span class="reply-toggle-line" aria-hidden="true"></span>
+                    <span>{{ comment.replies.length }} {{ comment.replies.length === 1 ? 'reply' : 'replies' }}</span>
+                    <span :class="['reply-toggle-chevron', { open: isRepliesExpanded(comment.id) }]" aria-hidden="true">
+                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m3 6 5 5 5-5" />
+                      </svg>
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="comment.replies.length && isRepliesExpanded(comment.id)" class="reply-list">
+                <div v-for="reply in comment.replies" :key="reply.id" class="comment reply-comment">
+                  <div class="comment-thread-line" aria-hidden="true"></div>
+                  <div class="comment-avatar reply-avatar">
+                    <img
+                      v-if="reply.avatar"
+                      :src="base + reply.avatar"
+                      :alt="`${reply.username} avatar`"
+                    />
+                    <span v-else>{{ getCommentInitial(reply.username) }}</span>
+                  </div>
+                  <div class="comment-body">
+                    <div class="comment-meta">
+                      <strong>{{ reply.username }}</strong>
+                      <span>{{ formatCommentTimestamp(reply.created_at) }}</span>
+                    </div>
+                    <p class="comment-copy">{{ reply.content }}</p>
+                    <div class="comment-actions">
+                      <button
+                        type="button"
+                        :class="['comment-reaction-btn', 'icon-only', { active: reply.userReaction === 'like' }]"
+                        @click="toggleCommentReaction(reply, 'like')"
+                        :aria-pressed="reply.userReaction === 'like'"
+                        aria-label="Like reply"
+                      >
+                        <span class="comment-reaction-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M8 11v9" />
+                            <path d="M8 20H5a2 2 0 0 1-2-2v-5.5A1.5 1.5 0 0 1 4.5 11H8Z" />
+                            <path d="M14 11V6.5A2.5 2.5 0 0 0 11.5 4L8 11v9h8.2a2 2 0 0 0 2-1.6l1.2-5.5A2 2 0 0 0 17.45 11Z" />
+                          </svg>
+                        </span>
+                        <span v-if="reply.likesCount" class="comment-reaction-count">{{ reply.likesCount }}</span>
+                      </button>
+                      <button
+                        type="button"
+                        :class="['comment-reaction-btn', 'icon-only', { active: reply.userReaction === 'dislike' }]"
+                        @click="toggleCommentReaction(reply, 'dislike')"
+                        :aria-pressed="reply.userReaction === 'dislike'"
+                        aria-label="Dislike reply"
+                      >
+                        <span class="comment-reaction-icon" aria-hidden="true">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 13V4" />
+                            <path d="M16 4h3a2 2 0 0 1 2 2v5.5A1.5 1.5 0 0 1 19.5 13H16Z" />
+                            <path d="M10 13v4.5A2.5 2.5 0 0 0 12.5 20l3.5-7V4H7.8a2 2 0 0 0-2 1.6l-1.2 5.5A2 2 0 0 0 6.55 13Z" />
+                          </svg>
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -251,6 +368,9 @@ const video = ref({});
 const videos = ref([]);
 const comments = ref([]);
 const newComment = ref('');
+const replyDrafts = ref({});
+const replyComposerId = ref(null);
+const expandedReplyThreads = ref({});
 const likesCount = ref(0);
 const liked = ref(false);
 const player = ref(null);
@@ -301,6 +421,10 @@ const totalPages = computed(() => {
   return Math.max(1, Math.ceil(filteredVideos.value.length / pageSize));
 });
 
+const totalCommentsCount = computed(() => {
+  return comments.value.reduce((total, comment) => total + 1 + comment.replies.length, 0);
+});
+
 const paginatedVideos = computed(() => {
   const start = (currentPage.value - 1) * pageSize;
   return filteredVideos.value.slice(start, start + pageSize);
@@ -339,28 +463,130 @@ const fetchLikes = async () => {
   }
 };
 
+const buildCommentThreads = (items) => {
+  const topLevel = [];
+  const repliesByParent = new Map();
+
+  items.forEach((item) => {
+    if (item.parent_comment_id) {
+      const existingReplies = repliesByParent.get(String(item.parent_comment_id)) || [];
+      existingReplies.push(item);
+      repliesByParent.set(String(item.parent_comment_id), existingReplies);
+      return;
+    }
+
+    topLevel.push(item);
+  });
+
+  return topLevel.map((comment) => ({
+    ...comment,
+    replies: (repliesByParent.get(String(comment.id)) || []).sort((a, b) => {
+      return new Date(a.created_at) - new Date(b.created_at);
+    })
+  }));
+};
+
 const fetchComments = async () => {
   const res = await api.get(`/comments/${route.params.id}`);
-  comments.value = res.data.map(normalizeComment);
+  comments.value = buildCommentThreads(res.data.map(normalizeComment));
+
+  expandedReplyThreads.value = comments.value.reduce((acc, comment) => {
+    acc[comment.id] = expandedReplyThreads.value[comment.id] ?? true;
+    return acc;
+  }, {});
 };
 
 const normalizeComment = (comment) => {
   return {
     ...comment,
+    parent_comment_id: comment.parent_comment_id ?? null,
     likesCount: Number(comment.likesCount || 0),
     dislikesCount: Number(comment.dislikesCount || 0),
-    userReaction: comment.userReaction || null
+    userReaction: comment.userReaction || null,
+    replies: comment.replies || []
   };
 };
 
-const updateCommentInList = (updatedComment) => {
-  comments.value = comments.value.map((comment) => {
-    if (String(comment.id) !== String(updatedComment.id)) {
-      return comment;
+const replaceCommentReaction = (items, updatedComment) => {
+  return items.map((comment) => {
+    if (String(comment.id) === String(updatedComment.id)) {
+      return {
+        ...comment,
+        ...normalizeComment(updatedComment)
+      };
     }
 
-    return normalizeComment(updatedComment);
+    if (comment.replies.length) {
+      return {
+        ...comment,
+        replies: replaceCommentReaction(comment.replies, updatedComment)
+      };
+    }
+
+    return comment;
   });
+};
+
+const updateCommentInList = (updatedComment) => {
+  comments.value = replaceCommentReaction(comments.value, updatedComment);
+};
+
+const getCommentInitial = (username) => {
+  return String(username || 'U').charAt(0).toUpperCase();
+};
+
+const formatCommentTimestamp = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'just now';
+  }
+
+  const seconds = Math.max(1, Math.floor((Date.now() - date.getTime()) / 1000));
+  const ranges = [
+    ['year', 31536000],
+    ['month', 2592000],
+    ['week', 604800],
+    ['day', 86400],
+    ['hour', 3600],
+    ['minute', 60]
+  ];
+
+  for (const [unit, size] of ranges) {
+    if (seconds >= size) {
+      const valueCount = Math.floor(seconds / size);
+      return `${valueCount} ${unit}${valueCount === 1 ? '' : 's'} ago`;
+    }
+  }
+
+  return 'just now';
+};
+
+const toggleReplyComposer = (commentId) => {
+  if (!isAuthenticated()) {
+    alert('Login required');
+    return;
+  }
+
+  replyComposerId.value = replyComposerId.value === commentId ? null : commentId;
+  replyDrafts.value = {
+    ...replyDrafts.value,
+    [commentId]: replyDrafts.value[commentId] || ''
+  };
+};
+
+const closeReplyComposer = () => {
+  replyComposerId.value = null;
+};
+
+const toggleReplies = (commentId) => {
+  expandedReplyThreads.value = {
+    ...expandedReplyThreads.value,
+    [commentId]: !expandedReplyThreads.value[commentId]
+  };
+};
+
+const isRepliesExpanded = (commentId) => {
+  return expandedReplyThreads.value[commentId] ?? true;
 };
 
 // Subscription status needs the uploader id from the fetched video payload.
@@ -709,6 +935,27 @@ const submitComment = async () => {
   await fetchComments();
 };
 
+const submitReply = async (commentId) => {
+  const content = String(replyDrafts.value[commentId] || '').trim();
+  if (!content) return;
+
+  await api.post(`/comments/${route.params.id}`, {
+    content,
+    parentCommentId: commentId
+  });
+
+  replyDrafts.value = {
+    ...replyDrafts.value,
+    [commentId]: ''
+  };
+  replyComposerId.value = null;
+  expandedReplyThreads.value = {
+    ...expandedReplyThreads.value,
+    [commentId]: true
+  };
+  await fetchComments();
+};
+
 const toggleCommentReaction = async (comment, reaction) => {
   if (!isAuthenticated()) {
     alert('Login required');
@@ -748,6 +995,8 @@ const loadPageData = async () => {
   showNativeControls.value = true;
   overlayHint.value = '';
   clearOverlayTimers();
+  replyComposerId.value = null;
+  replyDrafts.value = {};
 
   await Promise.all([
     fetchVideo(),
@@ -1191,53 +1440,149 @@ watch(player, () => {
   gap: 14px;
 }
 
-.comment {
-  padding-bottom: 14px;
+.comment-thread {
+  display: grid;
+  gap: 12px;
+  padding: 6px 0 20px;
   border-bottom: 1px solid #e7ebf0;
+  position: relative;
+}
+
+.comment-thread:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.comment-thread.has-replies::before {
+  content: '';
+  position: absolute;
+  left: 20px;
+  top: 48px;
+  bottom: 111px;
+  width: 2px;
+  border-radius: 999px;
+  background: #cbd5e1;
+}
+
+.comment {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.comment-avatar {
+  position: relative;
+  z-index: 2;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2a2d35, #6b7280);
+  color: #fff;
+  font-weight: 800;
+  flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.comment-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.comment-avatar span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.reply-avatar {
+  width: 36px;
+  height: 36px;
+  font-size: 0.88rem;
+}
+
+.comment-body {
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.comment-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.comment-meta span {
+  color: #7a8594;
+  font-size: 0.86rem;
+}
+
+.comment-copy {
+  margin: 0;
+  color: #171a20;
+  font-size: 1rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .comment-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 10px;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
 }
 
 .comment-reaction-btn {
-  border: 1px solid #d6dde6;
   border-radius: 999px;
-  padding: 7px 12px;
-  background: #f6f8fa;
+  padding: 7px 10px;
+  border: 0;
+  background: transparent;
   color: #526070;
   font: inherit;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   cursor: pointer;
-  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
 }
 
 .comment-reaction-btn:hover {
   background: #eef2f6;
+  color: #111318;
 }
 
 .comment-reaction-btn.active {
-  background: #fff1f3;
-  border-color: #f3bcc6;
+  background: #fff4f6;
   color: #b0182a;
 }
 
+.comment-reaction-btn.icon-only {
+  padding-right: 12px;
+}
+
 .comment-reaction-icon {
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(17, 19, 24, 0.08);
+  background: rgba(17, 19, 24, 0.06);
   font-size: 0.92rem;
   line-height: 1;
+  transition: background 160ms ease;
 }
 
 .comment-reaction-icon svg {
@@ -1245,13 +1590,149 @@ watch(player, () => {
   height: 14px;
 }
 
+.comment-reaction-count {
+  min-width: 10px;
+}
+
 .comment-reaction-btn.active .comment-reaction-icon {
   background: rgba(176, 24, 42, 0.12);
 }
 
-.comment:last-child {
-  padding-bottom: 0;
-  border-bottom: 0;
+.comment-text-action {
+  border: 0;
+  background: transparent;
+  color: #394452;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 7px 10px;
+  border-radius: 999px;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.comment-text-action:hover {
+  background: #eef2f6;
+  color: #111318;
+}
+
+.reply-box {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px 14px 12px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fafc, #f2f5f8);
+  border: 1px solid #e3e8ee;
+}
+
+.reply-box-shell {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.reply-composer-avatar {
+  width: 34px;
+  height: 34px;
+  font-size: 0.82rem;
+}
+
+.reply-box input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  border-bottom: 2px solid #cfd7e1;
+  border-radius: 16px;
+  padding: 10px 2px 12px;
+  background: transparent;
+  font: inherit;
+  outline: none;
+}
+
+.reply-box input:focus {
+  border-bottom-color: #cc1023;
+}
+
+.reply-box-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.reply-cancel-btn {
+  border: 1px solid #d6dde6;
+  background: #fff;
+  color: #394452;
+}
+
+.reply-toggle {
+  margin-top: 12px;
+  border: 0;
+  background: transparent;
+  color: #2453c0;
+  font: inherit;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  padding: 6px 10px 6px 0;
+  width: fit-content;
+  transition: color 160ms ease, transform 160ms ease;
+}
+
+.reply-toggle:hover {
+  color: #17398b;
+}
+
+.reply-toggle-line {
+  width: 24px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.35;
+}
+
+.reply-toggle-chevron {
+  display: inline-flex;
+  transition: transform 160ms ease;
+  line-height: 1;
+}
+
+.reply-toggle-chevron svg {
+  width: 14px;
+  height: 14px;
+}
+
+.reply-toggle-chevron.open {
+  transform: rotate(180deg);
+}
+
+.reply-list {
+  margin-left: 2px;
+  padding-left: 34px;
+  display: grid;
+  gap: 16px;
+}
+
+.reply-comment {
+  grid-template-columns: auto 1fr;
+  column-gap: 12px;
+  position: relative;
+}
+
+.comment-thread-line {
+  position: absolute;
+  z-index: 1;
+  left: -16px;
+  top: 10px;
+  width: 24px;
+  height: 12px;
+  border-left: 2px solid #cbd5e1;
+  border-bottom: 2px solid #cbd5e1;
+  border-bottom-left-radius: 14px;
+  pointer-events: none;
 }
 
 .comment strong,
