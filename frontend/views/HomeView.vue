@@ -93,8 +93,9 @@ onMounted(fetchVideos);
   min-height: calc(100vh - 88px);
   padding: 28px 28px 56px;
   background:
-    radial-gradient(circle at top left, rgba(255, 54, 54, 0.16), transparent 22%),
-    linear-gradient(180deg, #121318 0%, #1d2027 28%, #eef1f5 28%, #eef1f5 100%);
+    radial-gradient(circle at top left, rgba(255, 54, 54, 0.14), transparent 18%),
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.06), transparent 18%),
+    linear-gradient(180deg, rgba(17, 18, 23, 0.98) 0%, rgba(28, 31, 39, 0.98) 24%, #eef1f5 24%, #eef1f5 100%);
 }
 
 .hero,

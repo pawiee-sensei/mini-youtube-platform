@@ -39,10 +39,22 @@
         </button>
         <button
           v-if="isAuthenticated()"
-          class="nav-btn nav-btn-muted"
+          class="channel-chip"
           @click="$router.push(`/profile/${user?.id}`)"
+          :aria-label="user?.username ? `${user.username} channel` : 'My channel'"
         >
-          My Channel
+          <span class="channel-avatar">
+            <img
+              v-if="user?.avatar"
+              :src="`http://localhost:5000${user.avatar}`"
+              alt="Your channel avatar"
+            />
+            <span v-else>{{ getUserInitial(user?.username) }}</span>
+          </span>
+          <span class="channel-copy">
+           
+            <strong>{{ user?.username || 'Profile' }}</strong>
+          </span>
         </button>
         <button class="nav-btn nav-btn-primary" @click="handleLogout">
           Logout
@@ -84,6 +96,10 @@ const handleLogout = () => {
   router.push('/');
 };
 
+const getUserInitial = (username) => {
+  return String(username || 'U').charAt(0).toUpperCase();
+};
+
 // Keep the input in sync when navigation changes the search query.
 watch(
   () => route.query.search,
@@ -98,16 +114,21 @@ watch(
   position: sticky;
   top: 0;
   z-index: 20;
+  width: 100%;
+  margin: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
   flex-wrap: wrap;
   padding: 18px 28px;
+  box-sizing: border-box;
   background:
-    linear-gradient(180deg, rgba(12, 12, 14, 0.96), rgba(12, 12, 14, 0.88));
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    radial-gradient(circle at left center, rgba(255, 58, 58, 0.18), transparent 18%),
+    linear-gradient(180deg, rgba(17, 18, 23, 0.98), rgba(17, 18, 23, 0.92));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(18px);
+  box-shadow: 0 10px 30px rgba(8, 10, 15, 0.22);
 }
 
 .brand {
@@ -169,6 +190,7 @@ watch(
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
   font: inherit;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .search-input::placeholder {
@@ -223,6 +245,76 @@ watch(
   box-shadow: 0 12px 24px rgba(204, 16, 35, 0.28);
 }
 
+.channel-chip {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 12px 6px 6px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.channel-chip:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.channel-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #ff3131, #6a0f1d);
+  box-shadow: 0 8px 18px rgba(204, 16, 35, 0.24);
+}
+
+.channel-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.channel-avatar span {
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.channel-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.05;
+}
+
+.channel-copy small {
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.channel-copy strong {
+  color: #fff;
+  font-size: 0.88rem;
+  max-width: 104px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 700px) {
   .header {
     padding: 16px 18px;
@@ -238,6 +330,10 @@ watch(
   .nav {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .channel-copy strong {
+    max-width: none;
   }
 }
 </style>
